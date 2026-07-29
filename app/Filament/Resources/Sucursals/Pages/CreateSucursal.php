@@ -24,10 +24,7 @@ class CreateSucursal extends CreateRecord
                 'direccion' => $data['direccion'] ?? null,
                 'estado' => $data['estado'] ?? true,
             ],
-            datosAlmacenInicial: [
-                'nombre' => $data['almacen_nombre'],
-                'tipo' => $data['almacen_tipo'],
-            ],
+            datosAlmacenes: $data['almacenes'],
         );
     }
 }

@@ -7,15 +7,14 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['nombre', 'direccion', 'estado'])]
-class Sucursal extends Model
+#[Fillable(['nombre', 'slug', 'marca_id', 'categoria_id', 'imagen_principal', 'estado'])]
+class Producto extends Model
 {
     use HasFactory, SoftDeletes;
-
-    protected $table = 'sucursales';
 
     /**
      * Get the attributes that should be cast.
@@ -29,20 +28,27 @@ class Sucursal extends Model
         ];
     }
 
-
     /**
-     * @return HasMany<Almacen, $this>
+     * @return BelongsTo<Marca, $this>
      */
-    public function almacenes(): HasMany
+    public function marca(): BelongsTo
     {
-        return $this->hasMany(Almacen::class);
+        return $this->belongsTo(Marca::class);
     }
 
     /**
-     * @return HasMany<User, $this>
+     * @return BelongsTo<Categoria, $this>
      */
-    public function users(): HasMany
+    public function categoria(): BelongsTo
     {
-        return $this->hasMany(User::class);
+        return $this->belongsTo(Categoria::class);
+    }
+
+    /**
+     * @return HasMany<ProductoVariante, $this>
+     */
+    public function variantes(): HasMany
+    {
+        return $this->hasMany(ProductoVariante::class);
     }
 }

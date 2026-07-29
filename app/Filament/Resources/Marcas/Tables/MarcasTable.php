@@ -1,18 +1,19 @@
 <?php
 
-namespace App\Filament\Resources\Almacens\Tables;
+declare(strict_types=1);
+
+namespace App\Filament\Resources\Marcas\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
-use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
-class AlmacensTable
+class MarcasTable
 {
     public static function configure(Table $table): Table
     {
@@ -20,14 +21,13 @@ class AlmacensTable
             ->columns([
                 TextColumn::make('nombre')
                     ->searchable(),
-                TextColumn::make('sucursal.nombre')
-                    ->label('Sucursal')
-                    ->searchable(),
-                TextColumn::make('tipo')
-                    ->badge()
-                    ->searchable(),
-                IconColumn::make('estado')
-                    ->boolean(),
+                TextColumn::make('slug')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('productos_count')
+                    ->label('Productos')
+                    ->counts('productos')
+                    ->badge(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
