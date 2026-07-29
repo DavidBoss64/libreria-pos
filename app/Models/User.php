@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -45,6 +46,18 @@ class User extends Authenticatable implements FilamentUser, HasName
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class);
+    }
+
+    /**
+     * Almacenes asignados a este usuario (Almacenero) vía la tabla pivote
+     * `almacen_usuario` — modelo "hub and spoke", no depende de sucursal_id.
+     *
+     * @return BelongsToMany<Almacen, $this>
+     */
+    public function almacenes(): BelongsToMany
+    {
+        return $this->belongsToMany(Almacen::class, 'almacen_usuario', 'usuario_id', 'almacen_id')
+            ->withTimestamps();
     }
 
     public function canAccessPanel(Panel $panel): bool

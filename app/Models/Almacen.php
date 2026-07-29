@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable(['sucursal_id', 'nombre', 'tipo', 'estado'])]
@@ -38,5 +40,24 @@ class Almacen extends Model
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class);
+    }
+
+    /**
+     * @return HasMany<Inventario, $this>
+     */
+    public function inventarios(): HasMany
+    {
+        return $this->hasMany(Inventario::class);
+    }
+
+    /**
+     * Usuarios (Almaceneros) asignados a este almacén vía `almacen_usuario`.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function usuarios(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'almacen_usuario', 'almacen_id', 'usuario_id')
+            ->withTimestamps();
     }
 }
