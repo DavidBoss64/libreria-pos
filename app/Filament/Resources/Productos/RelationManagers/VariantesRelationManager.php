@@ -46,6 +46,7 @@ class VariantesRelationManager extends RelationManager
         return number_format((((float) $precio - (float) $costo) / (float) $costo) * 100, 2, '.', '');
     }
 
+
     /**
      * Inverso de calcularMargen: sugiere el precio a partir del margen deseado.
      * También devuelve null si el costo no es válido, para no pisar el precio actual.
@@ -68,7 +69,7 @@ class VariantesRelationManager extends RelationManager
                 ->required()
                 ->prefix('S/')
                 ->live(onBlur: true)
-                ->afterStateUpdated(fn (Set $set, Get $get) => $set(
+                ->afterStateUpdated(fn(Set $set, Get $get) => $set(
                     $nombreMargen,
                     self::calcularMargen($get('costo_real'), $get($nombrePrecio))
                 )),

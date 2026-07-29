@@ -54,7 +54,7 @@
 * slug: varchar(255) (Unique)
 * marca_id: bigint (FK -> marcas.id, Nullable, indexado)
 * categoria_id: bigint (FK -> categorias.id, indexado)
-* imagen_principal: varchar(255) (Nullable) — Ruta/URL de la imagen del producto (catálogo interno y futuro e-commerce). Un solo campo simple, sin galería múltiple, para no sobre-diseñar el MVP.
+* imagen_principal: varchar(255) (Nullable) — URL de una imagen alojada externamente (ej. Cloudinary u otro servicio en la nube), NO un archivo subido al servidor del proyecto. El formulario de Filament usa un campo de texto validado (`->url()`) con vista previa en vivo, no `FileUpload`. Un solo campo simple, sin galería múltiple, para no sobre-diseñar el MVP.
 * estado: boolean (Default: true)
 * timestamps, softDeletes
 
@@ -120,7 +120,18 @@
 * email: varchar(150) (Unique, Nullable)
 * password: varchar(255) (Nullable - Para inicio de sesión web)
 * telefono: varchar(50) (Nullable)
+* puntos_acumulados: integer (Default: 0) — Saldo actual de puntos de fidelización (Fase 4). Análogo a `inventarios.cantidad`: NUNCA se modifica directamente, siempre a través de un registro en `movimientos_puntos`.
 * timestamps, softDeletes
+
+**Tabla: movimientos_puntos** (Kardex de fidelización — mismo principio que `movimientos_inventario`)
+* id: bigint (PK)
+* cliente_id: bigint (FK -> clientes.id, indexado)
+* venta_id: bigint (FK -> ventas.id, Nullable, indexado) — nula solo para ajustes manuales
+* tipo: enum ('ganado', 'canjeado', 'ajuste')
+* puntos: integer (positivo para 'ganado', negativo para 'canjeado'/ajustes de resta)
+* saldo_despues: integer
+* usuario_id: bigint (FK -> users.id, Nullable) — quien procesó el ajuste manual (null si fue automático desde una venta)
+* created_at: timestamp
 
 **Tabla: ventas**
 * id: bigint (PK)
@@ -136,6 +147,9 @@
 * origen: enum ('pos', 'ecommerce') (Default: 'pos')
 * estado: enum ('pendiente', 'esperando_pago', 'completado', 'anulado') (indexado)
 * expira_en: timestamp (Nullable) — Fecha límite para que una pre-venta `pendiente` siga activa. Un job programado marca como `cancelado` las pre-ventas vencidas para liberar `cantidad_comprometida` en `inventarios`.
+* puntos_ganados: integer (Nullable, Default: 0) — Fidelización (Fase 4). Calculado al completar la venta según `config('fidelizacion.soles_por_punto')`. Solo aplica si `cliente_id` no es nulo (un `cliente_temporal` sin registro no puede acumular puntos).
+* puntos_utilizados: integer (Nullable, Default: 0) — Puntos canjeados por el cliente en esta venta, si decidió aplicarlos.
+* descuento_por_puntos: decimal(10, 2) (Nullable, Default: 0) — Monto de descuento resultante del canje (`puntos_utilizados * config('fidelizacion.valor_por_punto')`), ya reflejado en `total`.
 * timestamps
 
 **Tabla: venta_detalles**
@@ -205,3 +219,13 @@
 
 ## 8. Control de Caja (FUERA DEL MVP)
 **Decisión:** se descarta para el MVP. El negocio es de un solo propietario que no requiere arqueo formal de efectivo; toda la estadística de "cuánto se cobró en efectivo" se obtiene directamente de `ventas.metodo_pago` sin necesidad de una tabla adicional. Si en el futuro el negocio crece (más cajeros, sospecha de faltantes), se puede reintroducir una tabla `turnos_caja` (apertura/cierre + diferencia declarada vs. calculada) sin afectar el resto del esquema.
+
+## 9. Configuración del Negocio (Fase 4)
+**Tabla: configuracion_negocio** (fila única, siempre `id = 1` — no es un catálogo, es la configuración editable del negocio)
+* id: bigint (PK)
+* umbral_mayor: integer (Default: 24) — Migrado desde `config/precios.php` (Fase 2). Cantidad mínima para activar Precio Mayorista automáticamente (ver `LOGICA_NEGOCIO.md` sección 4).
+* soles_por_punto: integer (Default: 30) — Fidelización (Fase 4, sección 9 de `LOGICA_NEGOCIO.md`). Monto de compra necesario para ganar 1 punto.
+* valor_por_punto: decimal(10, 2) (Default: 0.30) — Valor en soles de descuento por cada punto canjeado.
+* timestamps
+
+**Decisión de diseño:** estos valores viven en una tabla de base de datos editable desde una **Page** dedicada de Filament en el panel `admin` (no un Resource — no se "crean" ni "eliminan" configuraciones, solo se edita la única fila existente), en vez de archivos `config/*.php`. Motivo: el propietario necesita poder ajustar estos números (ej. una promoción de doble puntos, o cambiar el umbral de mayorista) sin depender de un desarrollador ni de un despliegue de código. Se accede vía un modelo `ConfiguracionNegocio` con un accessor cacheado (ej. `ConfiguracionNegocio::actual()`), invalidando la caché automáticamente al guardar cambios desde el panel.

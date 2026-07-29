@@ -19,21 +19,30 @@ class ProductosTable
                 ImageColumn::make('imagen_principal')
                     ->label('')
                     ->disk('public')
-                    ->circular(),
+                    ->circular()
+                    ->imageSize(56),
                 TextColumn::make('nombre')
-                    ->searchable(),
+                    ->label('Producto')
+                    ->searchable()
+                    ->weight('bold')
+                    ->description(fn ($record) => collect([$record->marca?->nombre, $record->categoria?->nombre])
+                        ->filter()
+                        ->implode(' · ')),
                 TextColumn::make('marca.nombre')
                     ->label('Marca')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('categoria.nombre')
                     ->label('Categoría')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('variantes_count')
                     ->label('Variantes')
                     ->counts('variantes')
-                    ->badge(),
+                    ->badge()
+                    ->alignCenter(),
             ])
             ->filters([
                 SelectFilter::make('categoria_id')
