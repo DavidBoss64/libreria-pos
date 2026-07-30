@@ -24,12 +24,12 @@ class InventariosTable
                     ->label('Producto')
                     ->searchable()
                     ->weight('bold')
-                    ->description(fn ($record) => $record->productoVariante->codigo_interno),
+                    ->description(fn($record) => $record->productoVariante->codigo_interno),
                 TextColumn::make('cantidad')
                     ->label('Stock')
                     ->sortable()
                     ->badge()
-                    ->color(fn ($record) => $record->cantidad <= $record->stock_minimo ? 'danger' : 'success'),
+                    ->color(fn($record) => $record->cantidad <= $record->stock_minimo ? 'danger' : 'success'),
                 TextColumn::make('cantidad_comprometida')
                     ->label('Comprometido')
                     ->sortable()
@@ -45,12 +45,12 @@ class InventariosTable
                     // No usa ->relationship(): esa opción lista TODOS los almacenes sin
                     // respetar AislaPorAlmacen, filtrando el nombre de almacenes ajenos
                     // en el dropdown aunque la tabla ya los oculte.
-                    ->options(fn () => Auth::user()->almacenes()->pluck('almacenes.nombre', 'almacenes.id')),
+                    ->options(fn() => Auth::user()->almacenes()->pluck('almacenes.nombre', 'almacenes.id')),
                 TernaryFilter::make('stock_bajo')
                     ->label('Stock bajo')
                     ->queries(
-                        true: fn ($query) => $query->whereColumn('cantidad', '<=', 'stock_minimo'),
-                        false: fn ($query) => $query->whereColumn('cantidad', '>', 'stock_minimo'),
+                        true: fn($query) => $query->whereColumn('cantidad', '<=', 'stock_minimo'),
+                        false: fn($query) => $query->whereColumn('cantidad', '>', 'stock_minimo'),
                     ),
             ])
             ->defaultSort('cantidad');

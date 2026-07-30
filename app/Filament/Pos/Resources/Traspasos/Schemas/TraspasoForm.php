@@ -33,8 +33,13 @@ class TraspasoForm
                         Select::make('almacen_destino_id')
                             ->label('Almacén destino (mi sucursal)')
                             ->options(fn () => Almacen::query()
+                                ->with('sucursal')
                                 ->where('sucursal_id', Auth::user()?->sucursal_id)
-                                ->pluck('nombre', 'id'))
+                                ->where('tipo', AlmacenTipo::Tienda)
+                                ->get()
+                                ->mapWithKeys(fn (Almacen $almacen) => [
+                                    $almacen->id => "{$almacen->sucursal->nombre} — {$almacen->nombre}",
+                                ]))
                             ->searchable()
                             ->required(),
                     ]),

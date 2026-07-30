@@ -238,6 +238,25 @@ class InventarioTraspasoAislamientoUiTest extends TestCase
         ]);
     }
 
+    public function test_vendedor_no_puede_elegir_como_destino_un_almacen_de_tipo_deposito_de_su_propia_sucursal(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $this->actingAs($vendedorA);
+        Filament::setCurrentPanel('pos');
+
+        Livewire::test(CreateTraspaso::class)
+            ->fillForm([
+                'almacen_origen_id' => $this->depositoNorte->id,
+                'almacen_destino_id' => $this->depositoCentral->id,
+                'detalles' => [
+                    ['producto_variante_id' => $this->variante->id, 'cantidad' => 3],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['almacen_destino_id']);
+    }
+
     public function test_cajero_no_puede_crear_solicitudes_de_traspaso(): void
     {
         $cajero = User::factory()->create(['role' => UserRole::Cajero, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
