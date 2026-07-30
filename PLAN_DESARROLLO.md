@@ -117,6 +117,9 @@ Este documento define la hoja de ruta del proyecto, dividida en Fases (Sprints).
 > 3. **Modelo "hub and spoke" (Almacenero ↔ Almacenes):** vía tabla pivote `almacen_usuario`, no `sucursal_id`.
 > 4. **Ciclo de traspaso conducido enteramente por el Almacenero** (sin confirmación de recepción separada en la sucursal destino) — ver `LOGICA_NEGOCIO.md` sección 5 para el detalle y la condición de reapertura.
 
+- [x] **Paso 3.8: Widget de contexto del usuario en el Dashboard (panels `pos` y `almacen`):** el Dashboard por defecto de Filament se veía vacío (solo saludo + info de versión de Filament, ruido técnico sin valor para el negocio). Se agrega un widget simple y visible que confirma de un vistazo en qué sucursal/almacén está operando el usuario — reduce errores por confusión de contexto (ej. hacer un traspaso pensando que se está en otra sucursal).
+    - **Implementado:** `App\Filament\Pos\Widgets\MiContextoWidget` (Stat: nombre de la sucursal del usuario + su rol como descripción; "Sin sucursal asignada" en rojo si no tiene) y `App\Filament\Almacen\Widgets\MiContextoWidget` (Stat: nombre(s) del/los almacén(es) asignados vía `almacen_usuario`; "Sin almacenes asignados" en rojo si no tiene ninguno). Ambos son `StatsOverviewWidget` de Filament (simple, sin gráficos). Se quitó `FilamentInfoWidget` de ambos paneles (`PosPanelProvider`/`AlmacenPanelProvider`) por ser info de versión sin valor para un usuario real; los widgets nuevos se autodescubren vía el `discoverWidgets()` ya existente. 4 tests nuevos (`MiContextoWidgetTest`): sucursal/rol visibles, aviso si falta sucursal, almacenes visibles, aviso si no hay almacenes asignados. **Suite completa: 55/55, sin regresiones.**
+
 ---
 
 ## FASE 4: Módulo de Ventas POS (Pre-venta)
@@ -137,6 +140,9 @@ Este documento define la hoja de ruta del proyecto, dividida en Fases (Sprints).
 
 ## FASE 5: Optimizaciones (Plantillas y Compras)
 **Objetivo:** Agilizar procesos recurrentes de la librería.
+
+> **PENDIENTE OBLIGATORIO ANTES DEL PASO 5.2 (Compras) — revisión de salud del Kardex (post Fase 3.7):** agregar un `CHECK (cantidad >= 0)` a nivel de base de datos en la tabla `inventarios` (migración nueva). Hoy la garantía de "nunca negativo" vive solo en `RegistrarMovimientoInventarioAction` (convención de código, reforzada por disciplina de equipo, no por la base de datos); es la única vía real actualmente, pero Compras (Fase 5) es justo el momento en que más código nuevo va a tocar `inventarios` — el `CHECK` es una red de seguridad barata de última línea antes de que eso pase. Detectado en revisión de optimalidad del flujo de stock, no bloquea Fase 4.
+> Notas menores del mismo análisis, sin acción requerida por ahora: (a) deadlock teórico si dos traspasos concurrentes entre los mismos dos almacenes corren en direcciones opuestas — Postgres lo aborta de forma segura (no corrompe datos), solo falta un mensaje amigable/reintento si algún día se vuelve un problema real; (b) posible comando de reconciliación periódica (`inventarios.cantidad` vs. suma de `movimientos_inventario`) como herramienta de auditoría, no de corrección de bugs — opcional, sin fecha.
 
 - [ ] **Paso 5.1: Plantillas Escolares:** Desarrollo de `listas_escolares`. Lógica para que un vendedor seleccione "2do Básico - San Calixto" y el sistema agregue 15 productos a la canasta de golpe.
 - [ ] **Paso 5.2: Compras a Proveedores:** Ingreso de mercadería nueva (`compras`, `proveedores`). Al confirmar una compra, el sistema inyecta stock a través de `InventoryAction`.
