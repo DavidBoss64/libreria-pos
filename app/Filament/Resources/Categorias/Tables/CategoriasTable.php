@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Categorias\Tables;
 
+use App\Filament\Support\AccionesPapelera;
+use App\Models\Categoria;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -49,7 +50,10 @@ class CategoriasTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    AccionesPapelera::deleteBulk(
+                        fn (Categoria $categoria) => $categoria->tieneProductosActivos(),
+                        'Al menos una de las categorías seleccionadas tiene productos activos asociados. Reasígnalos primero, o quita esa categoría de la selección.',
+                    ),
                     ForceDeleteBulkAction::make(),
                     RestoreBulkAction::make(),
                 ]),

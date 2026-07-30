@@ -51,6 +51,13 @@ class UserForm
                             $role instanceof UserRole ? $role : UserRole::tryFrom($role ?? '')
                         );
                     }),
+                Select::make('almacenes')
+                    ->label('Almacenes asignados')
+                    ->relationship('almacenes', 'nombre')
+                    ->multiple()
+                    ->searchable()
+                    ->preload()
+                    ->helperText('Solo aplica a Almaceneros. Normalmente se asignan almacenes de tipo Depósito, no Tienda — el Almacenero gestiona stock bruto, no el punto de venta.'),
                 Toggle::make('is_active')
                     ->label('Activo')
                     ->default(true)

@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Marcas\Tables;
 
+use App\Filament\Support\AccionesPapelera;
+use App\Models\Marca;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -49,7 +50,10 @@ class MarcasTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    AccionesPapelera::deleteBulk(
+                        fn (Marca $marca) => $marca->tieneProductosActivos(),
+                        'Al menos una de las marcas seleccionadas tiene productos activos asociados. Reasígnalos primero, o quita esa marca de la selección.',
+                    ),
                     ForceDeleteBulkAction::make(),
                     RestoreBulkAction::make(),
                 ]),

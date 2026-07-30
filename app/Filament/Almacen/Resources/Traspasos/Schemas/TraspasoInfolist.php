@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace App\Filament\Almacen\Resources\Traspasos\Schemas;
 
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class TraspasoInfolist
 {
@@ -46,13 +49,39 @@ class TraspasoInfolist
                         RepeatableEntry::make('detalles')
                             ->hiddenLabel()
                             ->schema([
+                                ImageEntry::make('productoVariante.producto.imagen_principal')
+                                    ->hiddenLabel()
+                                    ->circular()
+                                    ->imageSize(48),
                                 TextEntry::make('productoVariante.producto.nombre')
-                                    ->label('Producto'),
+                                    ->label('Producto')
+                                    ->weight('bold'),
+                                TextEntry::make('marca_categoria')
+                                    ->label('Marca / Categoría')
+                                    ->placeholder('—')
+                                    ->state(fn ($record) => collect([
+                                        $record->productoVariante->producto->marca?->nombre,
+                                        $record->productoVariante->producto->categoria?->nombre,
+                                    ])->filter()->implode(' · ')),
+                                TextEntry::make('atributos')
+                                    ->label('Variante')
+                                    ->badge()
+                                    ->color('gray')
+                                    ->placeholder('—')
+                                    ->state(fn (Model $record): array => collect($record->productoVariante->atributos ?? [])
+                                        ->map(fn ($valor, $clave) => Str::title((string) $clave) . ': ' . $valor)
+                                        ->values()
+                                        ->all()),
                                 TextEntry::make('productoVariante.codigo_interno')
                                     ->label('Código'),
                                 TextEntry::make('cantidad')
-                                    ->label('Cantidad')
+                                    ->label('Solicitado')
                                     ->badge(),
+                                TextEntry::make('cantidad_preparada')
+                                    ->label('Preparado')
+                                    ->badge()
+                                    ->color(fn ($state) => $state === null ? 'gray' : 'success')
+                                    ->placeholder('Pendiente de revisión'),
                             ])
                             ->columns(3),
                     ]),

@@ -27,7 +27,8 @@ class AlmacenForm
                     ->maxLength(150),
                 Select::make('tipo')
                     ->options(AlmacenTipo::class)
-                    ->required(),
+                    ->required()
+                    ->helperText('Tienda: punto de venta, aquí venden tus vendedores. Depósito: bodega central, no se vende directo aquí.'),
                 Toggle::make('estado')
                     ->default(true)
                     ->required(),

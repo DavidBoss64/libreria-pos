@@ -60,4 +60,13 @@ class Almacen extends Model
         return $this->belongsToMany(User::class, 'almacen_usuario', 'almacen_id', 'usuario_id')
             ->withTimestamps();
     }
+
+    /**
+     * Usado para bloquear el envío a la papelera de un almacén que todavía
+     * tiene mercadería real (Paso 3.7) — evita "perder de vista" stock físico.
+     */
+    public function tieneStockFisico(): bool
+    {
+        return $this->inventarios()->where('cantidad', '>', 0)->exists();
+    }
 }

@@ -28,11 +28,18 @@ class CompletarTraspasoAction
             $registrarMovimiento = new RegistrarMovimientoInventarioAction();
 
             foreach ($traspaso->detalles as $detalle) {
+                $cantidadAMover = $detalle->cantidad_preparada ?? $detalle->cantidad;
+
+                // Una línea preparada con 0 (nada disponible en origen) no genera movimiento.
+                if ($cantidadAMover === 0) {
+                    continue;
+                }
+
                 $registrarMovimiento->handle(
                     almacenId: $traspaso->almacen_origen_id,
                     productoVarianteId: $detalle->producto_variante_id,
                     tipoMovimiento: TipoMovimientoInventario::Salida,
-                    cantidad: $detalle->cantidad,
+                    cantidad: $cantidadAMover,
                     motivo: "Traspaso #{$traspaso->id}: salida a almacén {$traspaso->almacen_destino_id}",
                     usuarioId: $usuarioProcesadorId,
                     referenciaTipo: Traspaso::class,
@@ -43,7 +50,7 @@ class CompletarTraspasoAction
                     almacenId: $traspaso->almacen_destino_id,
                     productoVarianteId: $detalle->producto_variante_id,
                     tipoMovimiento: TipoMovimientoInventario::Ingreso,
-                    cantidad: $detalle->cantidad,
+                    cantidad: $cantidadAMover,
                     motivo: "Traspaso #{$traspaso->id}: ingreso desde almacén {$traspaso->almacen_origen_id}",
                     usuarioId: $usuarioProcesadorId,
                     referenciaTipo: Traspaso::class,

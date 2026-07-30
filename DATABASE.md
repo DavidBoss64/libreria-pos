@@ -108,7 +108,8 @@
 * id: bigint (PK)
 * traspaso_id: bigint (FK -> traspasos.id, indexado)
 * producto_variante_id: bigint (FK -> producto_variantes.id)
-* cantidad: integer
+* cantidad: integer — cantidad solicitada.
+* cantidad_preparada: integer (Nullable) — Paso 3.6. Cuánto reunió realmente el Almacenero para esta línea (puede ser menor a `cantidad` si no había stock suficiente). Solo editable mientras el traspaso está en estado `preparando`. `null` mientras no ha sido revisada. Para avanzar el traspaso a `en_transito`, TODAS las líneas deben tener este campo no-nulo (aunque sea `0`). `CompletarTraspasoAction` mueve stock usando este valor (con fallback a `cantidad` para traspasos creados antes de este campo).
 * timestamps
 
 ## 4. Ventas (Modelo de Pre-venta POS + E-commerce)

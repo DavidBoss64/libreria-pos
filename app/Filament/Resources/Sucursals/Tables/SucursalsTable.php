@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Sucursals\Tables;
 
+use App\Filament\Support\AccionesPapelera;
+use App\Models\Sucursal;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -52,7 +53,10 @@ class SucursalsTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    AccionesPapelera::deleteBulk(
+                        fn (Sucursal $sucursal) => $sucursal->tieneStockFisico(),
+                        'Al menos una de las sucursales seleccionadas tiene stock físico registrado en alguno de sus almacenes. Quítala de la selección o vacía ese stock primero.',
+                    ),
                     ForceDeleteBulkAction::make(),
                     RestoreBulkAction::make(),
                 ]),

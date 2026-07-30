@@ -14,6 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProductoResource extends Resource
 {
@@ -44,6 +45,16 @@ class ProductoResource extends Resource
         return [
             //
         ];
+    }
+
+    /**
+     * El catálogo de solo lectura del Vendedor/Cajero no debe mostrar
+     * productos descontinuados (`estado = false`) mezclados con los activos.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->where('estado', true);
     }
 
     public static function getPages(): array

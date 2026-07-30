@@ -22,4 +22,14 @@ class Marca extends Model
     {
         return $this->hasMany(Producto::class);
     }
+
+    /**
+     * Usado para bloquear el envío a la papelera de una marca todavía en uso
+     * (Paso 3.7) — evita que `Producto::marca` empiece a resolver null en
+     * productos activos por el Global Scope de SoftDeletes.
+     */
+    public function tieneProductosActivos(): bool
+    {
+        return $this->productos()->exists();
+    }
 }

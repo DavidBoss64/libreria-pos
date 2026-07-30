@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['traspaso_id', 'producto_variante_id', 'cantidad'])]
+#[Fillable(['traspaso_id', 'producto_variante_id', 'cantidad', 'cantidad_preparada'])]
 class TraspasoDetalle extends Model
 {
     use HasFactory;

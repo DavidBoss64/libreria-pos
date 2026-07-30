@@ -138,6 +138,78 @@ class CompletarTraspasoActionTest extends TestCase
         }
     }
 
+    public function test_completar_traspaso_mueve_stock_segun_cantidad_preparada_no_segun_cantidad_solicitada(): void
+    {
+        $origen = $this->crearAlmacen('Central');
+        $destino = $this->crearAlmacen('Norte');
+        $variante = $this->crearVariante();
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+
+        (new RegistrarMovimientoInventarioAction())->handle(
+            $origen->id, $variante->id, TipoMovimientoInventario::Ingreso, 15, 'Compra inicial', $almacenero->id
+        );
+
+        $traspaso = Traspaso::create([
+            'almacen_origen_id' => $origen->id,
+            'almacen_destino_id' => $destino->id,
+            'estado' => TraspasoEstado::EnTransito,
+            'usuario_solicitante_id' => $vendedor->id,
+        ]);
+
+        TraspasoDetalle::create([
+            'traspaso_id' => $traspaso->id,
+            'producto_variante_id' => $variante->id,
+            'cantidad' => 10,
+            'cantidad_preparada' => 6,
+        ]);
+
+        (new CompletarTraspasoAction())->handle($traspaso, $almacenero->id);
+
+        $stockOrigen = Inventario::where('almacen_id', $origen->id)->where('producto_variante_id', $variante->id)->first();
+        $stockDestino = Inventario::where('almacen_id', $destino->id)->where('producto_variante_id', $variante->id)->first();
+
+        $this->assertSame(9, $stockOrigen->cantidad, 'Debe mover solo lo preparado (6), no lo solicitado (10).');
+        $this->assertSame(6, $stockDestino->cantidad);
+    }
+
+    public function test_completar_traspaso_con_cantidad_preparada_en_cero_no_genera_movimiento(): void
+    {
+        $origen = $this->crearAlmacen('Central');
+        $destino = $this->crearAlmacen('Norte');
+        $variante = $this->crearVariante();
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+
+        (new RegistrarMovimientoInventarioAction())->handle(
+            $origen->id, $variante->id, TipoMovimientoInventario::Ingreso, 5, 'Compra inicial', $almacenero->id
+        );
+
+        $traspaso = Traspaso::create([
+            'almacen_origen_id' => $origen->id,
+            'almacen_destino_id' => $destino->id,
+            'estado' => TraspasoEstado::EnTransito,
+            'usuario_solicitante_id' => $vendedor->id,
+        ]);
+
+        TraspasoDetalle::create([
+            'traspaso_id' => $traspaso->id,
+            'producto_variante_id' => $variante->id,
+            'cantidad' => 10,
+            'cantidad_preparada' => 0,
+        ]);
+
+        $resultado = (new CompletarTraspasoAction())->handle($traspaso, $almacenero->id);
+
+        $this->assertSame(TraspasoEstado::Completado, $resultado->estado);
+
+        $stockOrigen = Inventario::where('almacen_id', $origen->id)->where('producto_variante_id', $variante->id)->first();
+        $stockDestino = Inventario::where('almacen_id', $destino->id)->where('producto_variante_id', $variante->id)->first();
+
+        $this->assertSame(5, $stockOrigen->cantidad, 'No debe descontarse nada si se preparó 0.');
+        $this->assertNull($stockDestino, 'No debe crearse inventario en destino si se preparó 0.');
+    }
+
     public function test_no_se_puede_completar_un_traspaso_que_no_esta_en_transito(): void
     {
         $origen = $this->crearAlmacen('Central');

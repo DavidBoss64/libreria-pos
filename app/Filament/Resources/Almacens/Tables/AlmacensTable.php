@@ -2,8 +2,9 @@
 
 namespace App\Filament\Resources\Almacens\Tables;
 
+use App\Filament\Support\AccionesPapelera;
+use App\Models\Almacen;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -49,7 +50,10 @@ class AlmacensTable
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    AccionesPapelera::deleteBulk(
+                        fn (Almacen $almacen) => $almacen->tieneStockFisico(),
+                        'Al menos uno de los almacenes seleccionados todavía tiene stock físico registrado. Traspasa o ajusta ese stock a cero primero, o quítalo de la selección.',
+                    ),
                     ForceDeleteBulkAction::make(),
                     RestoreBulkAction::make(),
                 ]),

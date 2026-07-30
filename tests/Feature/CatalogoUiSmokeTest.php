@@ -80,4 +80,24 @@ class CatalogoUiSmokeTest extends TestCase
             ->assertSee('Cuaderno 100 hojas')
             ->assertSee('Cuadernos');
     }
+
+    public function test_pos_producto_index_table_oculta_productos_descontinuados(): void
+    {
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true]);
+        $this->crearProductoConVariante();
+
+        $categoria = Categoria::create(['nombre' => 'Lápices', 'slug' => 'lapices']);
+        Producto::create([
+            'nombre' => 'Lápiz Descontinuado',
+            'slug' => 'lapiz-descontinuado',
+            'categoria_id' => $categoria->id,
+            'estado' => false,
+        ]);
+
+        $this->actingAs($vendedor)
+            ->get('/pos/productos')
+            ->assertSuccessful()
+            ->assertSee('Cuaderno 100 hojas')
+            ->assertDontSee('Lápiz Descontinuado');
+    }
 }

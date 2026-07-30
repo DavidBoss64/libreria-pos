@@ -45,4 +45,15 @@ class Sucursal extends Model
     {
         return $this->hasMany(User::class);
     }
+
+    /**
+     * Usado para bloquear el envío a la papelera de una sucursal cuyos
+     * almacenes todavía tienen mercadería real (Paso 3.7).
+     */
+    public function tieneStockFisico(): bool
+    {
+        return $this->almacenes()
+            ->whereHas('inventarios', fn ($query) => $query->where('cantidad', '>', 0))
+            ->exists();
+    }
 }
