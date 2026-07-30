@@ -48,3 +48,5 @@ El trabajo está dividido estratégicamente para garantizar código limpio y apr
    * **Paso 3:** Lógica de Negocio (Services/Actions).
    * **Paso 4:** Endpoints API / Recursos de Filament (en el panel correspondiente: `admin`, `pos` o `almacen`).
    * **Paso 5:** Pruebas y validación manual.
+
+DAVID
