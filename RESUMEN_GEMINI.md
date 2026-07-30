@@ -10,7 +10,7 @@
   * Catálogo público/E-commerce operado vía aplicación independiente en **React** conectada por API al mismo motor.
 * **Comprobantes:** El sistema NO emite factura electrónica/fiscal (no hay integración con SUNAT). Cada venta genera un `numero_ticket` interno de control. Decisión de negocio confirmada, no un vacío pendiente.
 * **Fase Actual (MVP):** El enfoque actual es levantar el núcleo del sistema. Las notificaciones externas (WhatsApp) se posponen. El control de traspasos y stock será interno mediante los paneles de Filament.
-* **Estado de avance:** Fase 1 completa (incluyendo Paso 1.4.1: autogestión de cuenta — perfil y recuperación de contraseña en los 3 paneles). Fase 1.5 completa (Policies nativas + Trait de aislamiento por sucursal). **Fase 2 completa** (catálogo: marcas, categorías, productos y variantes; `PrecioService` con precios escalonados y umbral configurable de mayorista; calculadora de margen bidireccional en el panel `admin`; catálogo read-only en el panel `pos`). **Siguiente:** Fase 3 (Motor de Inventario y Traspasos), que incluye una decisión nueva — modelo "hub and spoke" para que un Almacenero gestione uno o varios almacenes vía tabla pivote `almacen_usuario`, en vez de por sucursal.
+* **Estado de avance:** Fase 1 completa (incluyendo Paso 1.4.1: autogestión de cuenta — perfil y recuperación de contraseña en los 3 paneles). Fase 1.5 completa (Policies nativas + Trait de aislamiento por sucursal). Fase 2 completa (catálogo: marcas, categorías, productos y variantes; `PrecioService` con precios escalonados; calculadora de margen bidireccional; catálogo read-only en `pos` sin exponer costo; imagen por URL con vista previa en vivo). **Fase 3 completa** (Kardex: `inventarios`, `movimientos_inventario`, `traspasos`, `almacen_usuario`; `InventoryAction` con `lockForUpdate()`; `AislaPorAlmacen`; Resources en paneles `almacen`/`pos`; Ajuste Manual de Inventario en `admin` — suite completa 34/34). **Siguiente:** Fase 4 (Ventas POS / Pre-venta), que incluye Configuración de Negocio editable (Paso 4.4) y Fidelización por puntos (Paso 4.5), ambas ya diseñadas de antemano.
 * **Lógicas de Negocio Críticas Implementadas (en diseño):**
   * **Pre-venta en Cola (POS):** Vendedores arman la canasta (`vendedor_id`), el cajero cobra y el cliente se retira. Sin reserva dura de stock; validación con bloqueo de fila al momento del cobro, más expiración automática de pre-ventas abandonadas.
   * **Omnicanalidad:** El stock se descuenta en tiempo real sin importar si la venta (`origen`) es `pos` o `ecommerce` (valores unificados en todos los documentos).
@@ -48,5 +48,3 @@ El trabajo está dividido estratégicamente para garantizar código limpio y apr
    * **Paso 3:** Lógica de Negocio (Services/Actions).
    * **Paso 4:** Endpoints API / Recursos de Filament (en el panel correspondiente: `admin`, `pos` o `almacen`).
    * **Paso 5:** Pruebas y validación manual.
-
-DAVID

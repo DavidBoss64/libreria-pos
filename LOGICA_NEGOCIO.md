@@ -4,7 +4,7 @@ Este documento centraliza todas las reglas de negocio, flujos operativos y obser
 
 ## 1. Estructura Organizacional y Multitenencia
 El sistema opera bajo una estructura jerárquica para controlar el inventario y las ventas:
-*   **Sucursales**: Puntos de venta físicos. Atienden al cliente final.
+*   **Sucursales**: Puntos de venta físicos. Atienden al cliente final. **Regla:** toda Sucursal nueva genera automáticamente su propio Almacén de tipo `tienda` (mismo nombre) — evita que quede una sucursal sin punto de venta asignado por un error de configuración manual. El administrador puede agregar almacenes adicionales a esa sucursal (ej. un depósito propio) en cualquier momento.
 *   **Almacenes**: Puntos de acopio de inventario bruto. Pueden abastecer a las sucursales.
 *   **Regla de Aislamiento**: Un usuario (Vendedor/Cajero) pertenece a una Sucursal específica. Su vista de inventario, ventas y pre-ventas debe estar filtrada estrictamente para que solo vea los datos de su sucursal asignada. El Administrador tiene visibilidad global. **Implementación técnica:** ver `PLAN_DESARROLLO.md` Fase 1.5, Paso 1.5.5 (Global Scope reutilizable) — esta regla debe aplicarse desde el primer Resource de negocio que se cree en Fase 2, no dejarse para revisar al final.
 
