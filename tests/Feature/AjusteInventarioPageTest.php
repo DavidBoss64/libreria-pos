@@ -86,6 +86,7 @@ class AjusteInventarioPageTest extends TestCase
         Livewire::test(AjusteInventario::class)
             ->callAction('registrarAjuste', data: [
                 'almacen_id' => $this->almacen->id,
+                'producto_id' => $this->variante->producto_id,
                 'producto_variante_id' => $this->variante->id,
                 'cantidad' => 15,
                 'motivo' => 'Stock inicial (Paso 3.4)',
@@ -125,6 +126,7 @@ class AjusteInventarioPageTest extends TestCase
         Livewire::test(AjusteInventario::class)
             ->callAction('registrarAjuste', data: [
                 'almacen_id' => $this->almacen->id,
+                'producto_id' => $this->variante->producto_id,
                 'producto_variante_id' => $this->variante->id,
                 'cantidad' => -10,
                 'motivo' => 'Merma por daño',
@@ -149,6 +151,7 @@ class AjusteInventarioPageTest extends TestCase
         Livewire::test(AjusteInventario::class)
             ->callAction('registrarAjuste', data: [
                 'almacen_id' => $this->almacen->id,
+                'producto_id' => $this->variante->producto_id,
                 'producto_variante_id' => $this->variante->id,
                 'cantidad' => 5,
                 'motivo' => '',
@@ -166,6 +169,7 @@ class AjusteInventarioPageTest extends TestCase
         Livewire::test(AjusteInventario::class)
             ->callAction('registrarAjuste', data: [
                 'almacen_id' => $this->almacen->id,
+                'producto_id' => $this->variante->producto_id,
                 'producto_variante_id' => $this->variante->id,
                 'cantidad' => 0,
                 'motivo' => 'Motivo cualquiera',

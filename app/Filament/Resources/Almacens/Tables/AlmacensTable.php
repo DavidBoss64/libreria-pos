@@ -2,12 +2,15 @@
 
 namespace App\Filament\Resources\Almacens\Tables;
 
+use App\Filament\Resources\Almacens\Pages\VerStockAlmacen;
 use App\Filament\Support\AccionesPapelera;
 use App\Models\Almacen;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
@@ -46,6 +49,11 @@ class AlmacensTable
                 TrashedFilter::make(),
             ])
             ->recordActions([
+                Action::make('verStock')
+                    ->label('Ver stock')
+                    ->icon(Heroicon::OutlinedArchiveBox)
+                    ->url(fn (Almacen $record) => VerStockAlmacen::getUrl(['record' => $record]))
+                    ->visible(fn (Almacen $record) => ! $record->trashed()),
                 EditAction::make(),
             ])
             ->toolbarActions([

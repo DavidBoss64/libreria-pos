@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Almacens;
 use App\Filament\Resources\Almacens\Pages\CreateAlmacen;
 use App\Filament\Resources\Almacens\Pages\EditAlmacen;
 use App\Filament\Resources\Almacens\Pages\ListAlmacens;
+use App\Filament\Resources\Almacens\Pages\VerStockAlmacen;
 use App\Filament\Resources\Almacens\Schemas\AlmacenForm;
 use App\Filament\Resources\Almacens\Tables\AlmacensTable;
 use App\Models\Almacen;
@@ -53,6 +54,7 @@ class AlmacenResource extends Resource
             'index' => ListAlmacens::route('/'),
             'create' => CreateAlmacen::route('/create'),
             'edit' => EditAlmacen::route('/{record}/edit'),
+            'stock' => VerStockAlmacen::route('/{record}/stock'),
         ];
     }
 
