@@ -29,19 +29,25 @@ class Producto extends Model
     }
 
     /**
+     * `withTrashed()`: mismo motivo que `ProductoVariante::producto()` — un producto
+     * referenciado en un documento histórico puede seguir mostrándose aunque su marca
+     * haya sido enviada a la papelera después.
+     *
      * @return BelongsTo<Marca, $this>
      */
     public function marca(): BelongsTo
     {
-        return $this->belongsTo(Marca::class);
+        return $this->belongsTo(Marca::class)->withTrashed();
     }
 
     /**
+     * `withTrashed()`: mismo motivo que `marca()`, aplicado a categoría.
+     *
      * @return BelongsTo<Categoria, $this>
      */
     public function categoria(): BelongsTo
     {
-        return $this->belongsTo(Categoria::class);
+        return $this->belongsTo(Categoria::class)->withTrashed();
     }
 
     /**

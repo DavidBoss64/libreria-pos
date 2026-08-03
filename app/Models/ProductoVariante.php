@@ -44,11 +44,15 @@ class ProductoVariante extends Model
     }
 
     /**
+     * `withTrashed()`: mismo motivo que `TraspasoDetalle::productoVariante()` — una
+     * variante puede quedar referenciada en un documento histórico (traspaso) después de
+     * que su producto padre haya sido enviado a la papelera de forma independiente.
+     *
      * @return BelongsTo<Producto, $this>
      */
     public function producto(): BelongsTo
     {
-        return $this->belongsTo(Producto::class);
+        return $this->belongsTo(Producto::class)->withTrashed();
     }
 
     /**

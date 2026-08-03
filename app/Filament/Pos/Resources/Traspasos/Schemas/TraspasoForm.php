@@ -9,6 +9,7 @@ use App\Filament\Support\SelectorProductoVariante;
 use App\Models\Almacen;
 use App\Models\Inventario;
 use App\Models\Producto;
+use App\Models\ProductoVariante;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -34,6 +35,11 @@ class TraspasoForm
                                 ->where('tipo', AlmacenTipo::Deposito)
                                 ->where('estado', true)
                                 ->pluck('nombre', 'id'))
+                            // Precargado cuando se llega desde el botón "Solicitar" o la
+                            // selección múltiple de `Pos\InventarioResource` (query string
+                            // `almacen_origen_id`); en el alta manual no hay query string,
+                            // así que no cambia nada.
+                            ->default(fn () => request()->integer('almacen_origen_id') ?: null)
                             ->searchable()
                             ->live()
                             ->required(),
@@ -48,6 +54,14 @@ class TraspasoForm
                                 ->mapWithKeys(fn (Almacen $almacen) => [
                                     $almacen->id => "{$almacen->sucursal->nombre} — {$almacen->nombre}",
                                 ]))
+                            // El Vendedor casi siempre pide para la única tienda de su
+                            // propia sucursal — se precarga como conveniencia, sigue
+                            // siendo editable si algún día hay más de una.
+                            ->default(fn () => Almacen::query()
+                                ->where('sucursal_id', Auth::user()?->sucursal_id)
+                                ->where('tipo', AlmacenTipo::Tienda)
+                                ->where('estado', true)
+                                ->value('id'))
                             ->searchable()
                             ->required(),
                     ]),
@@ -94,11 +108,50 @@ class TraspasoForm
                             ])
                             ->columns(2)
                             ->minItems(1)
-                            ->defaultItems(1)
+                            ->default(fn () => static::itemsIniciales())
                             ->addActionLabel('Agregar otro producto')
                             ->reorderable(false),
                     ]),
             ]);
+    }
+
+    /**
+     * Líneas iniciales del Repeater: por defecto una fila vacía (comportamiento
+     * de siempre), salvo que se llegue desde el botón "Solicitar" de una fila
+     * de `Pos\InventarioResource` (query string `producto_variante_id`) o desde
+     * su selección múltiple (`variantes`, CSV de IDs) — ahí se precargan las
+     * variantes elegidas con cantidad 1, y el Vendedor solo ajusta y confirma.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected static function itemsIniciales(): array
+    {
+        $ids = collect(explode(',', (string) request()->query('variantes', '')))
+            ->map(fn ($id) => (int) trim((string) $id))
+            ->filter();
+
+        if ($ids->isEmpty() && request()->filled('producto_variante_id')) {
+            $ids = collect([request()->integer('producto_variante_id')]);
+        }
+
+        if ($ids->isEmpty()) {
+            return [[]];
+        }
+
+        $variantesPorId = ProductoVariante::query()->whereIn('id', $ids)->get()->keyBy('id');
+
+        $items = $ids->unique()
+            ->map(fn (int $id) => $variantesPorId->get($id))
+            ->filter()
+            ->map(fn (ProductoVariante $variante) => [
+                'producto_id' => $variante->producto_id,
+                'producto_variante_id' => $variante->id,
+                'cantidad' => 1,
+            ])
+            ->values()
+            ->all();
+
+        return $items === [] ? [[]] : $items;
     }
 
     protected static function ayudaVariante(mixed $productoId, mixed $varianteId, mixed $almacenOrigenId): ?string

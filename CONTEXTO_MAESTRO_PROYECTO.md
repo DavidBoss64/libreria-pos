@@ -30,6 +30,8 @@ Sistema de Ventas e Inventario para una librería en **Perú**. Panel interno (P
   - Decisión documentada: el ciclo de traspaso lo conduce enteramente el Almacenero (sin confirmación de recepción separada en la sucursal destino) — reabrir solo si el negocio pide ese control adicional.
 - ⏳ **Siguiente: Fase 4** (Ventas POS / Pre-venta), con dos sub-decisiones ya cerradas de antemano (ver sección 3): Configuración de Negocio editable (Paso 4.4) y Fidelización por puntos (Paso 4.5).
 - Pendientes más adelante: Fase 5 (Plantillas/Compras — resolverá de forma definitiva el ingreso de stock), Fase 6 (API E-commerce), Fase 7 (Dashboard).
+- **Datos de prueba (sesión 2026-08-03):** `database/seeders/DatosPruebaSeeder.php` deja la BD lista para probar Fase 4 con datos realistas — 2 sucursales + 1 depósito central, 6 usuarios (uno por rol, contraseña `password`, ver detalle en `PLAN_DESARROLLO.md`), 20 productos / 27 variantes con precios y stock inicial (vía `RegistrarMovimientoInventarioAction`, respetando el Kardex). Se corre con `php artisan migrate:fresh --seed`.
+- **Nota técnica sin impacto funcional:** los 3 `PanelProvider` ahora usan `->viteTheme('resources/css/filament/theme.css')` (personalización visual estándar de Filament v5, sin overrides todavía) — ver detalle en `PLAN_DESARROLLO.md`.
 
 **El checklist real y detallado con notas de implementación vive en `PLAN_DESARROLLO.md`** — este resumen no lo reemplaza.
 

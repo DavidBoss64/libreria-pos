@@ -32,6 +32,7 @@ class AlmacenPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Emerald,
             ])
+            ->viteTheme('resources/css/filament/theme.css')
             ->discoverResources(in: app_path('Filament/Almacen/Resources'), for: 'App\Filament\Almacen\Resources')
             ->discoverPages(in: app_path('Filament/Almacen/Pages'), for: 'App\Filament\Almacen\Pages')
             ->pages([

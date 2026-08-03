@@ -23,10 +23,15 @@ class TraspasoDetalle extends Model
     }
 
     /**
+     * `withTrashed()`: un traspaso ya completado es un registro histórico — debe poder
+     * seguir mostrando qué variante se movió aunque esa variante haya sido enviada a la
+     * papelera después (Paso 3.7). Sin esto, el Infolist truena con "Attempt to read
+     * property on null" al intentar mostrar un traspaso antiguo.
+     *
      * @return BelongsTo<ProductoVariante, $this>
      */
     public function productoVariante(): BelongsTo
     {
-        return $this->belongsTo(ProductoVariante::class);
+        return $this->belongsTo(ProductoVariante::class)->withTrashed();
     }
 }

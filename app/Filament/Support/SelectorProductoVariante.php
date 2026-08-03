@@ -32,42 +32,29 @@ class SelectorProductoVariante
         }
 
         $imagenHtml = (filled($producto->imagen_principal) && filter_var($producto->imagen_principal, FILTER_VALIDATE_URL))
-            ? '<img src="' . e($producto->imagen_principal) . '" style="height:56px;width:56px;object-fit:cover;border-radius:0.5rem;flex-shrink:0;" onerror="this.style.display=\'none\'">'
-            : '<div style="height:56px;width:56px;border-radius:0.5rem;background:rgb(228 228 231 / 0.5);flex-shrink:0;"></div>';
+            ? '<img src="' . e($producto->imagen_principal) . '" style="height:48px;width:48px;object-fit:cover;border-radius:0.5rem;" onerror="this.style.display=\'none\'">'
+            : '<div style="height:48px;width:48px;border-radius:0.5rem;background:rgb(228 228 231 / 0.5);"></div>';
 
-        $badges = collect([
-            $producto->marca?->nombre,
-            $producto->categoria?->nombre,
-        ])->filter()
-            ->map(fn(string $texto) => '<span style="display:inline-block;padding:0.125rem 0.5rem;margin-right:0.25rem;border-radius:9999px;background:rgb(228 228 231 / 0.7);font-size:0.75rem;">' . e($texto) . '</span>')
-            ->implode('');
+        $celda = 'padding:0.5rem 0.75rem;border-bottom:1px solid rgb(228 228 231 / 0.5);text-align:left;';
+        $encabezado = $celda . 'font-size:0.75rem;text-transform:uppercase;color:rgb(113 113 122);font-weight:600;';
 
         return new HtmlString(
-            '<div style="display:flex;align-items:center;gap:0.75rem;">'
-                . $imagenHtml
-                . '<div><div style="font-weight:600;">' . e($producto->nombre) . '</div><div style="margin-top:0.25rem;">' . $badges . '</div></div>'
-                . '</div>
-                <div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Marca</th>
-                                <th>Categoría</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>
-                                    <div style="font-weight:600;">' . e($producto->nombre) . '</div>
-                                    
-                                </td>
-                                <td>' . e($producto->marca?->nombre) . '</td>
-                                <td>' . e($producto->categoria?->nombre) . '</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>'
+            '<div style="overflow-x:auto;">'
+                . '<table style="width:100%;border-collapse:collapse;font-size:0.875rem;">'
+                . '<thead><tr>'
+                . '<th style="' . $encabezado . '">Imagen</th>'
+                . '<th style="' . $encabezado . '">Producto</th>'
+                . '<th style="' . $encabezado . '">Marca</th>'
+                . '<th style="' . $encabezado . '">Categoría</th>'
+                . '</tr></thead>'
+                . '<tbody><tr>'
+                . '<td style="' . $celda . '">' . $imagenHtml . '</td>'
+                . '<td style="' . $celda . 'font-weight:600;">' . e($producto->nombre) . '</td>'
+                . '<td style="' . $celda . '">' . e($producto->marca?->nombre ?? '—') . '</td>'
+                . '<td style="' . $celda . '">' . e($producto->categoria?->nombre ?? '—') . '</td>'
+                . '</tr></tbody>'
+                . '</table>'
+                . '</div>'
         );
     }
 
