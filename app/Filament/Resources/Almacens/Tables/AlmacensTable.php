@@ -52,14 +52,14 @@ class AlmacensTable
                 Action::make('verStock')
                     ->label('Ver stock')
                     ->icon(Heroicon::OutlinedArchiveBox)
-                    ->url(fn (Almacen $record) => VerStockAlmacen::getUrl(['record' => $record]))
-                    ->visible(fn (Almacen $record) => ! $record->trashed()),
+                    ->url(fn(Almacen $record) => VerStockAlmacen::getUrl(['record' => $record]))
+                    ->visible(fn(Almacen $record) => ! $record->trashed()),
                 EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     AccionesPapelera::deleteBulk(
-                        fn (Almacen $almacen) => $almacen->tieneStockFisico(),
+                        fn(Almacen $almacen) => $almacen->tieneStockFisico(),
                         'Al menos uno de los almacenes seleccionados todavía tiene stock físico registrado. Traspasa o ajusta ese stock a cero primero, o quítalo de la selección.',
                     ),
                     ForceDeleteBulkAction::make(),

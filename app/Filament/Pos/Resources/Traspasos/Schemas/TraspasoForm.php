@@ -8,7 +8,6 @@ use App\Enums\AlmacenTipo;
 use App\Filament\Support\SelectorProductoVariante;
 use App\Models\Almacen;
 use App\Models\Inventario;
-use App\Models\Producto;
 use App\Models\ProductoVariante;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -72,17 +71,7 @@ class TraspasoForm
                             ->schema([
                                 Select::make('producto_id')
                                     ->label('Producto')
-                                    ->options(fn () => Producto::query()
-                                        ->with(['marca', 'categoria'])
-                                        ->where('estado', true)
-                                        ->get()
-                                        ->mapWithKeys(fn (Producto $producto) => [
-                                            $producto->id => collect([
-                                                $producto->nombre,
-                                                $producto->marca?->nombre,
-                                                $producto->categoria?->nombre,
-                                            ])->filter()->implode(' — '),
-                                        ]))
+                                    ->options(fn () => SelectorProductoVariante::opcionesProductos())
                                     ->searchable()
                                     ->live()
                                     ->dehydrated(false)

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\AlmacenTipo;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -55,5 +56,19 @@ class Sucursal extends Model
         return $this->almacenes()
             ->whereHas('inventarios', fn ($query) => $query->where('cantidad', '>', 0))
             ->exists();
+    }
+
+    /**
+     * El almacén tipo 'tienda' de esta sucursal — donde se vende físicamente y contra
+     * el que se descuenta stock al cerrar una venta (ver Fase 4). Siempre debería
+     * existir uno (auto-creado por `SucursalObserver`), pero se devuelve `null` en vez
+     * de reventar para que el llamador decida cómo manejar el caso defensivo.
+     */
+    public function almacenTienda(): ?Almacen
+    {
+        return $this->almacenes()
+            ->where('tipo', AlmacenTipo::Tienda)
+            ->where('estado', true)
+            ->first();
     }
 }

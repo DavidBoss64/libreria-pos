@@ -19,6 +19,29 @@ use Illuminate\Support\Str;
  */
 class SelectorProductoVariante
 {
+    /**
+     * Opciones del `Select` transitorio de Producto (paso 1 de la cascada) — productos
+     * activos con marca/categoría en el label. Compartido entre `TraspasoForm` (pos) y
+     * `VentaForm` (pos) para no mantener dos copias de la misma consulta.
+     *
+     * @return array<int, string>
+     */
+    public static function opcionesProductos(): array
+    {
+        return Producto::query()
+            ->with(['marca', 'categoria'])
+            ->where('estado', true)
+            ->get()
+            ->mapWithKeys(fn (Producto $producto) => [
+                $producto->id => collect([
+                    $producto->nombre,
+                    $producto->marca?->nombre,
+                    $producto->categoria?->nombre,
+                ])->filter()->implode(' — '),
+            ])
+            ->all();
+    }
+
     public static function renderPreviewProducto(mixed $productoId): HtmlString|string
     {
         if (blank($productoId)) {

@@ -1,0 +1,234 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature;
+
+use App\Actions\Ventas\CrearPreventaAction;
+use App\Enums\UserRole;
+use App\Enums\VentaEstado;
+use App\Enums\VentaMetodoPago;
+use App\Filament\Pos\Resources\Ventas\Pages\CreateVenta;
+use App\Filament\Pos\Resources\Ventas\Pages\ListVentas;
+use App\Models\Categoria;
+use App\Models\Inventario;
+use App\Models\Producto;
+use App\Models\ProductoVariante;
+use App\Models\Sucursal;
+use App\Models\User;
+use App\Models\Venta;
+use Filament\Facades\Filament;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class VentaUiTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Sucursal $sucursalA;
+
+    private Sucursal $sucursalB;
+
+    private ProductoVariante $variante;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // SucursalObserver (Paso 3.5) crea automáticamente el almacén 'tienda' de cada una.
+        $this->sucursalA = Sucursal::create(['nombre' => 'Sucursal A', 'estado' => true]);
+        $this->sucursalB = Sucursal::create(['nombre' => 'Sucursal B', 'estado' => true]);
+
+        $categoria = Categoria::create(['nombre' => 'Cuadernos', 'slug' => 'cuadernos']);
+        $producto = Producto::create([
+            'nombre' => 'Cuaderno 100 hojas',
+            'slug' => 'cuaderno-100-hojas',
+            'categoria_id' => $categoria->id,
+            'estado' => true,
+        ]);
+        $this->variante = ProductoVariante::create([
+            'producto_id' => $producto->id,
+            'codigo_interno' => 'CUA-001',
+            'costo_real' => 5.00,
+            'precio_venta_unidad' => 6.50,
+            'precio_venta_docena' => 6.00,
+            'precio_venta_mayor' => 5.50,
+            'estado' => true,
+        ]);
+
+        Inventario::create([
+            'almacen_id' => $this->sucursalA->almacenTienda()->id,
+            'producto_variante_id' => $this->variante->id,
+            'cantidad' => 10,
+        ]);
+    }
+
+    public function test_vendedor_puede_crear_una_preventa_desde_el_formulario(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $this->actingAs($vendedorA);
+        Filament::setCurrentPanel('pos');
+
+        Livewire::test(CreateVenta::class)
+            ->fillForm([
+                'cliente_temporal' => 'Juan Polera Roja',
+                'detalles' => [
+                    ['producto_id' => $this->variante->producto_id, 'producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('ventas', [
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_temporal' => 'Juan Polera Roja',
+            'estado' => VentaEstado::Pendiente->value,
+        ]);
+
+        $this->assertDatabaseHas('venta_detalles', [
+            'producto_variante_id' => $this->variante->id,
+            'cantidad' => 2,
+        ]);
+    }
+
+    public function test_vendedor_debe_indicar_cliente_registrado_o_temporal(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $this->actingAs($vendedorA);
+        Filament::setCurrentPanel('pos');
+
+        Livewire::test(CreateVenta::class)
+            ->fillForm([
+                'detalles' => [
+                    ['producto_id' => $this->variante->producto_id, 'producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['cliente_id', 'cliente_temporal']);
+    }
+
+    public function test_cajero_no_puede_crear_preventas(): void
+    {
+        $cajero = User::factory()->create(['role' => UserRole::Cajero, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $this->actingAs($cajero)
+            ->get('/pos/ventas/create')
+            ->assertForbidden();
+    }
+
+    public function test_vendedor_solo_ve_ventas_de_su_propia_sucursal(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+        $vendedorB = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalB->id]);
+
+        Venta::create([
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_temporal' => 'Cliente Sucursal A',
+            'total' => 10,
+            'estado' => VentaEstado::Pendiente,
+        ]);
+
+        Venta::create([
+            'sucursal_id' => $this->sucursalB->id,
+            'vendedor_id' => $vendedorB->id,
+            'cliente_temporal' => 'Cliente Sucursal B',
+            'total' => 20,
+            'estado' => VentaEstado::Pendiente,
+        ]);
+
+        $this->actingAs($vendedorA)
+            ->get('/pos/ventas')
+            ->assertSuccessful()
+            ->assertSee('Cliente Sucursal A')
+            ->assertDontSee('Cliente Sucursal B');
+
+        $this->actingAs($vendedorB)
+            ->get('/pos/ventas')
+            ->assertSuccessful()
+            ->assertSee('Cliente Sucursal B')
+            ->assertDontSee('Cliente Sucursal A');
+    }
+
+    public function test_boton_cobrar_solo_lo_ve_el_cajero_y_cancelar_solo_el_vendedor(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+        $cajeroA = User::factory()->create(['role' => UserRole::Cajero, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        Venta::create([
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_temporal' => 'Juan',
+            'total' => 10,
+            'estado' => VentaEstado::Pendiente,
+        ]);
+
+        $this->actingAs($cajeroA)
+            ->get('/pos/ventas')
+            ->assertSuccessful()
+            ->assertSee('Cobrar')
+            ->assertDontSee('Cancelar');
+
+        $this->actingAs($vendedorA)
+            ->get('/pos/ventas')
+            ->assertSuccessful()
+            ->assertSee('Cancelar')
+            ->assertDontSee('Cobrar');
+    }
+
+    public function test_cajero_puede_cobrar_una_preventa_pendiente_desde_la_tabla(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+        $cajeroA = User::factory()->create(['role' => UserRole::Cajero, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        // Vía la Action real (no Venta::create() directo): así cantidad_comprometida
+        // queda correctamente reservada, como en el flujo real Vendedor -> Cajero.
+        $venta = (new CrearPreventaAction())->handle([
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_temporal' => 'Juan',
+            'detalles' => [
+                ['producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+            ],
+        ]);
+
+        $this->actingAs($cajeroA);
+        Filament::setCurrentPanel('pos');
+
+        Livewire::test(ListVentas::class)
+            ->mountTableAction('cobrar', $venta)
+            ->setTableActionData(['metodo_pago' => VentaMetodoPago::Efectivo->value])
+            ->assertHasNoTableActionErrors()
+            ->callMountedTableAction()
+            ->assertSuccessful()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(VentaEstado::Completado, $venta->fresh()->estado);
+        $this->assertSame($cajeroA->id, $venta->fresh()->usuario_id);
+
+        $inventario = Inventario::where('almacen_id', $this->sucursalA->almacenTienda()->id)
+            ->where('producto_variante_id', $this->variante->id)
+            ->first();
+
+        $this->assertSame(8, $inventario->cantidad, 'Debe descontar el stock real (10 - 2).');
+    }
+
+    public function test_vendedor_no_puede_cobrar_una_preventa(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $venta = Venta::create([
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_temporal' => 'Juan',
+            'total' => 13,
+            'estado' => VentaEstado::Pendiente,
+        ]);
+
+        $this->assertFalse($vendedorA->can('cobrar', $venta));
+    }
+}
