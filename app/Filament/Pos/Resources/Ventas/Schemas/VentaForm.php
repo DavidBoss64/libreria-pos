@@ -7,7 +7,9 @@ namespace App\Filament\Pos\Resources\Ventas\Schemas;
 use App\Enums\TipoPrecioAplicado;
 use App\Filament\Support\SelectorProductoVariante;
 use App\Models\Cliente;
+use App\Models\ProductoVariante;
 use App\Services\PrecioService;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -27,6 +29,7 @@ class VentaForm
             ->components([
                 Section::make('Cliente')
                     ->columns(2)
+                    ->columnSpanFull()
                     ->components([
                         Select::make('cliente_id')
                             ->label('Cliente registrado')
@@ -54,30 +57,58 @@ class VentaForm
                             ->maxLength(100),
                     ]),
                 Section::make('Productos')
+                    ->columnSpanFull()
                     ->components([
+                        Select::make('buscador_producto')
+                            ->label('Buscar y agregar producto')
+                            ->placeholder('Nombre, código interno o código de barras…')
+                            ->helperText('Selecciona un resultado para agregarlo a la canasta. También sirve con lector de código de barras.')
+                            ->options(fn() => SelectorProductoVariante::opcionesVariantesConProducto())
+                            ->searchable()
+                            ->live()
+                            ->dehydrated(false)
+                            ->afterStateUpdated(function (mixed $state, Set $set, Get $get) {
+                                if (blank($state)) {
+                                    return;
+                                }
+
+                                $detalles = array_values(array_filter(
+                                    $get('detalles') ?? [],
+                                    fn(array $linea) => filled($linea['producto_variante_id'] ?? null)
+                                ));
+
+                                $indice = null;
+                                foreach ($detalles as $i => $linea) {
+                                    if ((int) $linea['producto_variante_id'] === (int) $state) {
+                                        $indice = $i;
+                                        break;
+                                    }
+                                }
+
+                                if ($indice !== null) {
+                                    $detalles[$indice]['cantidad'] = (int) ($detalles[$indice]['cantidad'] ?? 0) + 1;
+                                } else {
+                                    $detalles[] = [
+                                        'producto_variante_id' => $state,
+                                        'cantidad' => 1,
+                                        'forzar_mayorista' => false,
+                                    ];
+                                }
+
+                                $set('detalles', $detalles);
+                                $set('buscador_producto', null);
+                            })
+                            ->columnSpanFull(),
                         Repeater::make('detalles')
                             ->hiddenLabel()
                             ->schema([
-                                Select::make('producto_id')
-                                    ->label('Producto')
-                                    ->options(fn() => SelectorProductoVariante::opcionesProductos())
-                                    ->searchable()
-                                    ->live()
-                                    ->dehydrated(false)
-                                    ->afterStateUpdated(fn(Set $set) => $set('producto_variante_id', null))
+                                Hidden::make('producto_variante_id')
                                     ->required(),
-                                TextEntry::make('producto_preview')
+                                TextEntry::make('detalle_preview')
                                     ->hiddenLabel()
                                     ->html()
-                                    ->state(fn(Get $get) => SelectorProductoVariante::renderPreviewProducto($get('producto_id')))
+                                    ->state(fn(Get $get) => SelectorProductoVariante::renderPreviewVariante($get('producto_variante_id')))
                                     ->columnSpanFull(),
-                                Select::make('producto_variante_id')
-                                    ->label('Variante')
-                                    ->options(fn(Get $get) => SelectorProductoVariante::opcionesVariantes($get('producto_id')))
-                                    ->disabled(fn(Get $get) => blank($get('producto_id')))
-                                    ->searchable()
-                                    ->live()
-                                    ->required(),
                                 TextInput::make('cantidad')
                                     ->numeric()
                                     ->minValue(1)
@@ -98,10 +129,17 @@ class VentaForm
                                     ->columnSpanFull(),
                             ])
                             ->columns(2)
+                            ->default([])
                             ->minItems(1)
-                            ->default([[]])
-                            ->addActionLabel('Agregar otro producto')
+                            ->addable(false)
                             ->reorderable(false)
+                            ->itemLabel(function (array $state): ?string {
+                                $variante = filled($state['producto_variante_id'] ?? null)
+                                    ? ProductoVariante::find($state['producto_variante_id'])
+                                    : null;
+
+                                return $variante ? SelectorProductoVariante::labelVarianteConProducto($variante) : null;
+                            })
                             ->live(),
                         TextEntry::make('total_estimado')
                             ->label('Total estimado')
@@ -119,7 +157,7 @@ class VentaForm
         }
 
         try {
-            $calculado = (new PrecioService())->calcularPrecio((int) $varianteId, (int) $cantidad, (bool) $forzarMayorista);
+            $calculado = (new PrecioService)->calcularPrecio((int) $varianteId, (int) $cantidad, (bool) $forzarMayorista);
         } catch (Throwable) {
             return 'No se pudo calcular el precio.';
         }
@@ -139,7 +177,7 @@ class VentaForm
     protected static function totalEstimado(array $detalles): string
     {
         $total = '0.00';
-        $precioService = new PrecioService();
+        $precioService = new PrecioService;
 
         foreach ($detalles as $linea) {
             $varianteId = $linea['producto_variante_id'] ?? null;
@@ -156,6 +194,7 @@ class VentaForm
                 continue;
             }
         }
+
         return "S/ {$total}";
     }
 }

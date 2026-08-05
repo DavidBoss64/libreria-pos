@@ -26,6 +26,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'origen',
     'estado',
     'expira_en',
+    'puntos_ganados',
+    'puntos_utilizados',
+    'descuento_por_puntos',
 ])]
 class Venta extends Model
 {
@@ -44,6 +47,9 @@ class Venta extends Model
             'origen' => VentaOrigen::class,
             'estado' => VentaEstado::class,
             'expira_en' => 'datetime',
+            'puntos_ganados' => 'integer',
+            'puntos_utilizados' => 'integer',
+            'descuento_por_puntos' => 'decimal:2',
         ];
     }
 
@@ -89,5 +95,13 @@ class Venta extends Model
     public function detalles(): HasMany
     {
         return $this->hasMany(VentaDetalle::class);
+    }
+
+    /**
+     * @return HasMany<MovimientoPuntos, $this>
+     */
+    public function movimientosPuntos(): HasMany
+    {
+        return $this->hasMany(MovimientoPuntos::class);
     }
 }

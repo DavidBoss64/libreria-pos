@@ -11,6 +11,7 @@ use App\Enums\VentaMetodoPago;
 use App\Filament\Pos\Resources\Ventas\Pages\CreateVenta;
 use App\Filament\Pos\Resources\Ventas\Pages\ListVentas;
 use App\Models\Categoria;
+use App\Models\Cliente;
 use App\Models\Inventario;
 use App\Models\Producto;
 use App\Models\ProductoVariante;
@@ -19,6 +20,7 @@ use App\Models\User;
 use App\Models\Venta;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -75,7 +77,7 @@ class VentaUiTest extends TestCase
             ->fillForm([
                 'cliente_temporal' => 'Juan Polera Roja',
                 'detalles' => [
-                    ['producto_id' => $this->variante->producto_id, 'producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+                    ['producto_variante_id' => $this->variante->id, 'cantidad' => 2],
                 ],
             ])
             ->call('create')
@@ -104,7 +106,7 @@ class VentaUiTest extends TestCase
         Livewire::test(CreateVenta::class)
             ->fillForm([
                 'detalles' => [
-                    ['producto_id' => $this->variante->producto_id, 'producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+                    ['producto_variante_id' => $this->variante->id, 'cantidad' => 2],
                 ],
             ])
             ->call('create')
@@ -187,7 +189,7 @@ class VentaUiTest extends TestCase
 
         // Vía la Action real (no Venta::create() directo): así cantidad_comprometida
         // queda correctamente reservada, como en el flujo real Vendedor -> Cajero.
-        $venta = (new CrearPreventaAction())->handle([
+        $venta = (new CrearPreventaAction)->handle([
             'sucursal_id' => $this->sucursalA->id,
             'vendedor_id' => $vendedorA->id,
             'cliente_temporal' => 'Juan',
@@ -230,5 +232,75 @@ class VentaUiTest extends TestCase
         ]);
 
         $this->assertFalse($vendedorA->can('cobrar', $venta));
+    }
+
+    public function test_buscador_de_producto_agrega_una_fila_a_la_canasta(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $this->actingAs($vendedorA);
+        Filament::setCurrentPanel('pos');
+
+        $component = Livewire::test(CreateVenta::class)
+            ->set('data.buscador_producto', $this->variante->id);
+
+        $detalles = data_get($component->get('data'), 'detalles', []);
+
+        $this->assertCount(1, $detalles, 'El buscador debe agregar automáticamente una fila a la canasta.');
+        $this->assertSame($this->variante->id, (int) Arr::first($detalles)['producto_variante_id']);
+        $this->assertSame(1, (int) Arr::first($detalles)['cantidad'], 'La primera vez que se busca un producto, la cantidad debe iniciar en 1.');
+        $this->assertNull(data_get($component->get('data'), 'buscador_producto'), 'El buscador debe limpiarse tras agregar el producto.');
+
+        // Buscar el mismo producto otra vez debe incrementar la cantidad, no duplicar la fila.
+        $component->set('data.buscador_producto', $this->variante->id);
+
+        $detalles = data_get($component->get('data'), 'detalles', []);
+        $this->assertCount(1, $detalles, 'Buscar el mismo producto dos veces no debe crear una segunda fila.');
+        $this->assertSame(2, (int) Arr::first($detalles)['cantidad'], 'La segunda búsqueda del mismo producto debe incrementar la cantidad existente.');
+
+        $component
+            ->fillForm(['cliente_temporal' => 'Juan Polera Roja'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('venta_detalles', [
+            'producto_variante_id' => $this->variante->id,
+            'cantidad' => 2,
+        ]);
+    }
+
+    public function test_cajero_puede_canjear_puntos_al_cobrar_desde_la_tabla(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+        $cajeroA = User::factory()->create(['role' => UserRole::Cajero, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+        $cliente = Cliente::create(['nombres' => 'Ana', 'apellidos' => 'Ruiz', 'puntos_acumulados' => 10]);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_id' => $cliente->id,
+            'detalles' => [
+                ['producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+            ],
+        ]);
+
+        $this->actingAs($cajeroA);
+        Filament::setCurrentPanel('pos');
+
+        Livewire::test(ListVentas::class)
+            ->mountTableAction('cobrar', $venta)
+            ->setTableActionData([
+                'metodo_pago' => VentaMetodoPago::Efectivo->value,
+                'puntos_utilizados' => 5,
+            ])
+            ->assertHasNoTableActionErrors()
+            ->callMountedTableAction()
+            ->assertSuccessful()
+            ->assertHasNoTableActionErrors();
+
+        $venta->refresh();
+        $this->assertSame(5, $venta->puntos_utilizados);
+        $this->assertSame('1.50', (string) $venta->descuento_por_puntos);
+        $this->assertSame(5, $cliente->fresh()->puntos_acumulados, '10 iniciales - 5 canjeados + 0 ganados sobre el total final (11.50 < 30).');
     }
 }

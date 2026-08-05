@@ -56,6 +56,18 @@ class VentaInfolist
                                 TextEntry::make('referencia_pago')
                                     ->label('Referencia de pago')
                                     ->placeholder('—'),
+                                TextEntry::make('puntos_ganados')
+                                    ->label('Puntos ganados')
+                                    ->placeholder('—')
+                                    ->visible(fn ($record) => $record->cliente_id !== null),
+                                TextEntry::make('puntos_utilizados')
+                                    ->label('Puntos canjeados')
+                                    ->placeholder('—')
+                                    ->visible(fn ($record) => $record->cliente_id !== null),
+                                TextEntry::make('descuento_por_puntos')
+                                    ->label('Descuento por puntos')
+                                    ->money('PEN')
+                                    ->visible(fn ($record) => $record->cliente_id !== null && $record->puntos_utilizados > 0),
                                 TextEntry::make('expira_en')
                                     ->label('Expira')
                                     ->dateTime('d/m/Y H:i')

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['nombres', 'apellidos', 'documento', 'email', 'password', 'telefono'])]
+#[Fillable(['nombres', 'apellidos', 'documento', 'email', 'password', 'telefono', 'puntos_acumulados'])]
 #[Hidden(['password'])]
 class Cliente extends Model
 {
@@ -26,6 +26,7 @@ class Cliente extends Model
     {
         return [
             'password' => 'hashed',
+            'puntos_acumulados' => 'integer',
         ];
     }
 
@@ -35,5 +36,16 @@ class Cliente extends Model
     public function ventas(): HasMany
     {
         return $this->hasMany(Venta::class);
+    }
+
+    /**
+     * Kardex de fidelización — mismo principio que `movimientos_inventario`: nunca se
+     * modifica `puntos_acumulados` directamente (ver `RegistrarMovimientoPuntosAction`).
+     *
+     * @return HasMany<MovimientoPuntos, $this>
+     */
+    public function movimientosPuntos(): HasMany
+    {
+        return $this->hasMany(MovimientoPuntos::class);
     }
 }

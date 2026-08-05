@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Enums\TipoPrecioAplicado;
+use App\Models\ConfiguracionNegocio;
 use App\Models\ProductoVariante;
 use InvalidArgumentException;
 use RuntimeException;
@@ -19,11 +20,11 @@ class PrecioService
             throw new InvalidArgumentException("La cantidad debe ser mayor a 0, recibido: {$cantidad}.");
         }
 
-        $umbralMayor = (int) config('precios.umbral_mayor');
+        $umbralMayor = ConfiguracionNegocio::actual()->umbral_mayor;
 
         if ($umbralMayor <= self::UMBRAL_DOCENA) {
             throw new RuntimeException(
-                'config(precios.umbral_mayor) debe ser mayor al umbral de Docena ('.self::UMBRAL_DOCENA.'), '
+                'configuracion_negocio.umbral_mayor debe ser mayor al umbral de Docena ('.self::UMBRAL_DOCENA.'), '
                 ."valor actual: {$umbralMayor}."
             );
         }

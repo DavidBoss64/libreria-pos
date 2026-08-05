@@ -8,6 +8,7 @@ use App\Actions\Ventas\CancelarPreventaAction;
 use App\Actions\Ventas\CerrarVentaAction;
 use App\Enums\VentaEstado;
 use App\Enums\VentaMetodoPago;
+use App\Exceptions\PuntosInsuficientesException;
 use App\Exceptions\VentaSinStockDisponibleException;
 use App\Models\Venta;
 use Filament\Actions\Action;
@@ -82,27 +83,43 @@ class VentasTable
                             // siempre da true (instancia !== string) y deja este campo requerido siempre.
                             ->required(fn (Get $get) => $get('metodo_pago') !== VentaMetodoPago::Efectivo)
                             ->maxLength(255),
+                        TextInput::make('puntos_utilizados')
+                            ->label('Puntos a canjear')
+                            ->helperText(fn (Venta $record) => $record->cliente
+                                ? "El cliente tiene {$record->cliente->puntos_acumulados} punto(s) disponibles. Pregúntale si desea canjearlos."
+                                : 'Solo un cliente registrado puede canjear puntos.')
+                            ->numeric()
+                            ->integer()
+                            ->default(0)
+                            ->minValue(0)
+                            ->maxValue(fn (Venta $record) => $record->cliente?->puntos_acumulados ?? 0)
+                            ->visible(fn (Venta $record) => $record->cliente_id !== null),
                     ])
                     ->action(function (array $data, Venta $record): void {
                         try {
                             // $data['metodo_pago'] ya llega como instancia de VentaMetodoPago (mismo
                             // EnumStateCast del Select), no como string — no hace falta ::from().
-                            $resultado = (new CerrarVentaAction())->handle($record, [
+                            $resultado = (new CerrarVentaAction)->handle($record, [
                                 'usuario_id' => Auth::id(),
                                 'metodo_pago' => $data['metodo_pago'],
                                 'referencia_pago' => $data['referencia_pago'] ?? null,
+                                'puntos_utilizados' => (int) ($data['puntos_utilizados'] ?? 0),
                             ]);
 
                             $mensaje = $resultado->itemsRechazados === []
                                 ? 'La venta se cobró correctamente.'
                                 : count($resultado->itemsRechazados).' producto(s) sin stock suficiente quedaron fuera de la venta — revisa el detalle con el cliente.';
 
+                            if ($resultado->venta->puntos_ganados > 0) {
+                                $mensaje .= " El cliente ganó {$resultado->venta->puntos_ganados} punto(s).";
+                            }
+
                             Notification::make()
                                 ->title('Venta cerrada')
                                 ->body($mensaje)
                                 ->success()
                                 ->send();
-                        } catch (VentaSinStockDisponibleException|InvalidArgumentException $exception) {
+                        } catch (VentaSinStockDisponibleException|InvalidArgumentException|PuntosInsuficientesException $exception) {
                             Notification::make()
                                 ->title('No se pudo cobrar la venta')
                                 ->body($exception->getMessage())
@@ -118,7 +135,7 @@ class VentasTable
                     ->visible(fn (Venta $record) => $record->estado === VentaEstado::Pendiente && Auth::user()?->can('update', $record))
                     ->action(function (Venta $record): void {
                         try {
-                            (new CancelarPreventaAction())->handle($record);
+                            (new CancelarPreventaAction)->handle($record);
 
                             Notification::make()
                                 ->title('Pre-venta cancelada')

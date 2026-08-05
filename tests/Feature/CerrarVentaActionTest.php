@@ -8,12 +8,16 @@ use App\Actions\Inventario\RegistrarMovimientoInventarioAction;
 use App\Actions\Ventas\CerrarVentaAction;
 use App\Actions\Ventas\CrearPreventaAction;
 use App\Enums\TipoMovimientoInventario;
+use App\Enums\TipoMovimientoPuntos;
 use App\Enums\UserRole;
 use App\Enums\VentaEstado;
 use App\Enums\VentaMetodoPago;
+use App\Exceptions\PuntosInsuficientesException;
 use App\Exceptions\VentaSinStockDisponibleException;
 use App\Models\Categoria;
+use App\Models\Cliente;
 use App\Models\Inventario;
+use App\Models\MovimientoPuntos;
 use App\Models\Producto;
 use App\Models\ProductoVariante;
 use App\Models\Sucursal;
@@ -61,7 +65,7 @@ class CerrarVentaActionTest extends TestCase
             return;
         }
 
-        (new RegistrarMovimientoInventarioAction())->handle(
+        (new RegistrarMovimientoInventarioAction)->handle(
             $sucursal->almacenTienda()->id,
             $variante->id,
             TipoMovimientoInventario::Ingreso,
@@ -69,6 +73,15 @@ class CerrarVentaActionTest extends TestCase
             'Stock inicial de prueba',
             $almacenero->id,
         );
+    }
+
+    private function crearCliente(int $puntosIniciales = 0): Cliente
+    {
+        return Cliente::create([
+            'nombres' => 'María',
+            'apellidos' => 'Gómez',
+            'puntos_acumulados' => $puntosIniciales,
+        ]);
     }
 
     public function test_cierra_venta_descuenta_stock_libera_comprometido_y_completa(): void
@@ -81,7 +94,7 @@ class CerrarVentaActionTest extends TestCase
 
         $this->darStockReal($sucursal, $variante, 10, $almacenero);
 
-        $venta = (new CrearPreventaAction())->handle([
+        $venta = (new CrearPreventaAction)->handle([
             'sucursal_id' => $sucursal->id,
             'vendedor_id' => $vendedor->id,
             'cliente_temporal' => 'Juan Polera Roja',
@@ -90,7 +103,7 @@ class CerrarVentaActionTest extends TestCase
             ],
         ]);
 
-        $resultado = (new CerrarVentaAction())->handle($venta, [
+        $resultado = (new CerrarVentaAction)->handle($venta, [
             'usuario_id' => $cajero->id,
             'metodo_pago' => VentaMetodoPago::Efectivo,
         ]);
@@ -117,7 +130,7 @@ class CerrarVentaActionTest extends TestCase
 
         $this->darStockReal($sucursal, $variante, 10, $almacenero);
 
-        $venta = (new CrearPreventaAction())->handle([
+        $venta = (new CrearPreventaAction)->handle([
             'sucursal_id' => $sucursal->id,
             'vendedor_id' => $vendedor->id,
             'cliente_temporal' => 'Juan',
@@ -128,7 +141,7 @@ class CerrarVentaActionTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        (new CerrarVentaAction())->handle($venta, [
+        (new CerrarVentaAction)->handle($venta, [
             'usuario_id' => $cajero->id,
             'metodo_pago' => VentaMetodoPago::Qr,
         ]);
@@ -155,7 +168,7 @@ class CerrarVentaActionTest extends TestCase
         $this->darStockReal($sucursal, $varianteA, 5, $almacenero);
         // Sin stock real de $varianteB (0) — simula una venta concurrente que se la llevó.
 
-        $venta = (new CrearPreventaAction())->handle([
+        $venta = (new CrearPreventaAction)->handle([
             'sucursal_id' => $sucursal->id,
             'vendedor_id' => $vendedor->id,
             'cliente_temporal' => 'Juan',
@@ -165,7 +178,7 @@ class CerrarVentaActionTest extends TestCase
             ],
         ]);
 
-        $resultado = (new CerrarVentaAction())->handle($venta, [
+        $resultado = (new CerrarVentaAction)->handle($venta, [
             'usuario_id' => $cajero->id,
             'metodo_pago' => VentaMetodoPago::Efectivo,
         ]);
@@ -195,7 +208,7 @@ class CerrarVentaActionTest extends TestCase
         $cajero = User::factory()->create(['role' => UserRole::Cajero, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
 
         // Sin stock real en absoluto.
-        $venta = (new CrearPreventaAction())->handle([
+        $venta = (new CrearPreventaAction)->handle([
             'sucursal_id' => $sucursal->id,
             'vendedor_id' => $vendedor->id,
             'cliente_temporal' => 'Juan',
@@ -207,7 +220,7 @@ class CerrarVentaActionTest extends TestCase
         $this->expectException(VentaSinStockDisponibleException::class);
 
         try {
-            (new CerrarVentaAction())->handle($venta, [
+            (new CerrarVentaAction)->handle($venta, [
                 'usuario_id' => $cajero->id,
                 'metodo_pago' => VentaMetodoPago::Efectivo,
             ]);
@@ -232,9 +245,226 @@ class CerrarVentaActionTest extends TestCase
 
         $this->expectException(RuntimeException::class);
 
-        (new CerrarVentaAction())->handle($venta, [
+        (new CerrarVentaAction)->handle($venta, [
             'usuario_id' => $cajero->id,
             'metodo_pago' => VentaMetodoPago::Efectivo,
+        ]);
+    }
+
+    /**
+     * Fidelización (LOGICA_NEGOCIO.md sección 9, Paso 4.5): 1 punto por cada
+     * `soles_por_punto` (default 30) del total FINAL de la venta. Total = 7 x 10.00 = 70.00.
+     */
+    public function test_venta_con_cliente_registrado_gana_puntos_segun_el_total_final(): void
+    {
+        $sucursal = $this->crearSucursal('Central');
+        $variante = $this->crearVariante('CUA-001', 10.00);
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $cajero = User::factory()->create(['role' => UserRole::Cajero, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+        $cliente = $this->crearCliente();
+
+        $this->darStockReal($sucursal, $variante, 10, $almacenero);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $sucursal->id,
+            'vendedor_id' => $vendedor->id,
+            'cliente_id' => $cliente->id,
+            'detalles' => [
+                ['producto_variante_id' => $variante->id, 'cantidad' => 7],
+            ],
+        ]);
+
+        $resultado = (new CerrarVentaAction)->handle($venta, [
+            'usuario_id' => $cajero->id,
+            'metodo_pago' => VentaMetodoPago::Efectivo,
+        ]);
+
+        $this->assertSame('70.00', (string) $resultado->venta->total);
+        $this->assertSame(2, $resultado->venta->puntos_ganados);
+        $this->assertSame(0, $resultado->venta->puntos_utilizados);
+        $this->assertSame(2, $cliente->fresh()->puntos_acumulados);
+        $this->assertDatabaseHas('movimientos_puntos', [
+            'cliente_id' => $cliente->id,
+            'venta_id' => $venta->id,
+            'tipo' => TipoMovimientoPuntos::Ganado->value,
+            'puntos' => 2,
+            'saldo_despues' => 2,
+        ]);
+    }
+
+    public function test_venta_con_cliente_temporal_no_acumula_puntos(): void
+    {
+        $sucursal = $this->crearSucursal('Central');
+        $variante = $this->crearVariante('CUA-001', 10.00);
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $cajero = User::factory()->create(['role' => UserRole::Cajero, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+
+        $this->darStockReal($sucursal, $variante, 10, $almacenero);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $sucursal->id,
+            'vendedor_id' => $vendedor->id,
+            'cliente_temporal' => 'Juan',
+            'detalles' => [
+                ['producto_variante_id' => $variante->id, 'cantidad' => 7],
+            ],
+        ]);
+
+        $resultado = (new CerrarVentaAction)->handle($venta, [
+            'usuario_id' => $cajero->id,
+            'metodo_pago' => VentaMetodoPago::Efectivo,
+        ]);
+
+        $this->assertSame(0, $resultado->venta->puntos_ganados);
+        $this->assertSame(0, MovimientoPuntos::count());
+    }
+
+    /**
+     * El Cajero (nunca el Vendedor) ofrece el canje al cerrar la venta — decisión
+     * confirmada explícitamente en la sesión de Paso 4.5. Total bruto = 5 x 10.00 = 50.00;
+     * canjear 10 puntos (valor_por_punto default 0.30) descuenta 3.00 → total final 47.00;
+     * puntos ganados sobre el total final = floor(47.00 / 30) = 1.
+     */
+    public function test_cajero_puede_canjear_puntos_del_cliente_y_se_descuenta_del_total(): void
+    {
+        $sucursal = $this->crearSucursal('Central');
+        $variante = $this->crearVariante('CUA-001', 10.00);
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $cajero = User::factory()->create(['role' => UserRole::Cajero, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+        $cliente = $this->crearCliente(10);
+
+        $this->darStockReal($sucursal, $variante, 10, $almacenero);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $sucursal->id,
+            'vendedor_id' => $vendedor->id,
+            'cliente_id' => $cliente->id,
+            'detalles' => [
+                ['producto_variante_id' => $variante->id, 'cantidad' => 5],
+            ],
+        ]);
+
+        $resultado = (new CerrarVentaAction)->handle($venta, [
+            'usuario_id' => $cajero->id,
+            'metodo_pago' => VentaMetodoPago::Efectivo,
+            'puntos_utilizados' => 10,
+        ]);
+
+        $this->assertSame('47.00', (string) $resultado->venta->total);
+        $this->assertSame('3.00', (string) $resultado->venta->descuento_por_puntos);
+        $this->assertSame(10, $resultado->venta->puntos_utilizados);
+        $this->assertSame(1, $resultado->venta->puntos_ganados);
+        $this->assertSame(1, $cliente->fresh()->puntos_acumulados, 'Saldo final: 10 - 10 canjeados + 1 ganado.');
+        $this->assertDatabaseHas('movimientos_puntos', [
+            'cliente_id' => $cliente->id,
+            'venta_id' => $venta->id,
+            'tipo' => TipoMovimientoPuntos::Canjeado->value,
+            'puntos' => -10,
+        ]);
+    }
+
+    public function test_canje_que_supera_el_total_de_la_venta_se_rechaza_y_no_completa_nada(): void
+    {
+        $sucursal = $this->crearSucursal('Central');
+        $variante = $this->crearVariante('CUA-001', 10.00);
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $cajero = User::factory()->create(['role' => UserRole::Cajero, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+        $cliente = $this->crearCliente(1000);
+
+        $this->darStockReal($sucursal, $variante, 10, $almacenero);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $sucursal->id,
+            'vendedor_id' => $vendedor->id,
+            'cliente_id' => $cliente->id,
+            'detalles' => [
+                ['producto_variante_id' => $variante->id, 'cantidad' => 1],
+            ],
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        try {
+            (new CerrarVentaAction)->handle($venta, [
+                'usuario_id' => $cajero->id,
+                'metodo_pago' => VentaMetodoPago::Efectivo,
+                'puntos_utilizados' => 1000,
+            ]);
+        } finally {
+            $venta->refresh();
+            $this->assertSame(VentaEstado::Pendiente, $venta->estado);
+            $this->assertSame(1000, $cliente->fresh()->puntos_acumulados, 'El canje rechazado no debe tocar el saldo del cliente.');
+
+            $almacenTienda = $sucursal->almacenTienda();
+            $inventario = Inventario::where('almacen_id', $almacenTienda->id)->where('producto_variante_id', $variante->id)->first();
+            $this->assertSame(10, $inventario->cantidad, 'El rollback debe revertir también el descuento de stock.');
+        }
+    }
+
+    public function test_canje_que_excede_el_saldo_del_cliente_lanza_excepcion_y_revierte_todo(): void
+    {
+        $sucursal = $this->crearSucursal('Central');
+        $variante = $this->crearVariante('CUA-001', 10.00);
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $cajero = User::factory()->create(['role' => UserRole::Cajero, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+        $cliente = $this->crearCliente(2);
+
+        $this->darStockReal($sucursal, $variante, 10, $almacenero);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $sucursal->id,
+            'vendedor_id' => $vendedor->id,
+            'cliente_id' => $cliente->id,
+            'detalles' => [
+                ['producto_variante_id' => $variante->id, 'cantidad' => 5],
+            ],
+        ]);
+
+        $this->expectException(PuntosInsuficientesException::class);
+
+        try {
+            (new CerrarVentaAction)->handle($venta, [
+                'usuario_id' => $cajero->id,
+                'metodo_pago' => VentaMetodoPago::Efectivo,
+                'puntos_utilizados' => 5,
+            ]);
+        } finally {
+            $venta->refresh();
+            $this->assertSame(VentaEstado::Pendiente, $venta->estado);
+            $this->assertSame(2, $cliente->fresh()->puntos_acumulados);
+        }
+    }
+
+    public function test_solo_un_cliente_registrado_puede_canjear_puntos(): void
+    {
+        $sucursal = $this->crearSucursal('Central');
+        $variante = $this->crearVariante('CUA-001', 10.00);
+        $vendedor = User::factory()->create(['role' => UserRole::Vendedor, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $cajero = User::factory()->create(['role' => UserRole::Cajero, 'sucursal_id' => $sucursal->id, 'is_active' => true]);
+        $almacenero = User::factory()->create(['role' => UserRole::Almacenero, 'is_active' => true]);
+
+        $this->darStockReal($sucursal, $variante, 10, $almacenero);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $sucursal->id,
+            'vendedor_id' => $vendedor->id,
+            'cliente_temporal' => 'Juan',
+            'detalles' => [
+                ['producto_variante_id' => $variante->id, 'cantidad' => 1],
+            ],
+        ]);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        (new CerrarVentaAction)->handle($venta, [
+            'usuario_id' => $cajero->id,
+            'metodo_pago' => VentaMetodoPago::Efectivo,
+            'puntos_utilizados' => 5,
         ]);
     }
 }
