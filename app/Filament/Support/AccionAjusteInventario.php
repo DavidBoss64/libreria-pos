@@ -13,12 +13,12 @@ use App\Models\Producto;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Factory compartido del modal "Registrar ajuste manual de inventario"
@@ -41,14 +41,14 @@ class AccionAjusteInventario
             ->schema([
                 Select::make('almacen_id')
                     ->label('Almacén')
-                    ->options(fn() => $almacenFijo !== null
+                    ->options(fn () => $almacenFijo !== null
                         ? [$almacenFijo->id => "{$almacenFijo->sucursal->nombre} — {$almacenFijo->nombre} ({$almacenFijo->tipo->getLabel()})"]
                         : Almacen::query()
-                        ->with('sucursal')
-                        ->get()
-                        ->mapWithKeys(fn(Almacen $almacen) => [
-                            $almacen->id => "{$almacen->sucursal->nombre} — {$almacen->nombre} ({$almacen->tipo->getLabel()})",
-                        ]))
+                            ->with('sucursal')
+                            ->get()
+                            ->mapWithKeys(fn (Almacen $almacen) => [
+                                $almacen->id => "{$almacen->sucursal->nombre} — {$almacen->nombre} ({$almacen->tipo->getLabel()})",
+                            ]))
                     ->default($almacenFijo?->id)
                     ->disabled($almacenFijo !== null)
                     ->dehydrated()
@@ -57,11 +57,11 @@ class AccionAjusteInventario
                     ->required(),
                 Select::make('producto_id')
                     ->label('Producto')
-                    ->options(fn() => Producto::query()
+                    ->options(fn () => Producto::query()
                         ->with(['marca', 'categoria'])
                         ->where('estado', true)
                         ->get()
-                        ->mapWithKeys(fn(Producto $producto) => [
+                        ->mapWithKeys(fn (Producto $producto) => [
                             $producto->id => collect([
                                 $producto->nombre,
                                 $producto->marca?->nombre,
@@ -71,27 +71,23 @@ class AccionAjusteInventario
                     ->searchable()
                     ->live()
                     ->dehydrated(false)
-                    ->afterStateUpdated(fn(Set $set) => $set('producto_variante_id', null))
+                    ->afterStateUpdated(fn (Set $set) => $set('producto_variante_id', null))
                     ->required(),
                 TextEntry::make('producto_preview')
                     ->hiddenLabel()
                     ->html()
-                    ->state(fn(Get $get) => SelectorProductoVariante::renderPreviewProducto($get('producto_id')))
+                    ->state(fn (Get $get) => SelectorProductoVariante::renderPreviewProducto($get('producto_id')))
                     ->columnSpanFull(),
                 Select::make('producto_variante_id')
                     ->label('Variante')
-                    ->options(fn(Get $get) => SelectorProductoVariante::opcionesVariantes($get('producto_id')))
-                    ->disabled(fn(Get $get) => blank($get('producto_id')))
-                    ->helperText(fn(Get $get) => static::ayudaVariante($get('producto_variante_id'), $get('almacen_id')))
+                    ->options(fn (Get $get) => SelectorProductoVariante::opcionesVariantes($get('producto_id')))
+                    ->disabled(fn (Get $get) => blank($get('producto_id')))
+                    ->helperText(fn (Get $get) => static::ayudaVariante($get('producto_variante_id'), $get('almacen_id')))
                     ->searchable()
                     ->live()
+                    ->afterStateUpdated(fn (Set $set, mixed $state) => CamposCantidadPorCaja::sincronizarUnidadesPorCaja($set, $state))
                     ->required(),
-                TextInput::make('cantidad')
-                    ->label('Cantidad (+/-)')
-                    ->integer()
-                    ->required()
-                    ->rule('not_in:0')
-                    ->helperText('Usa un número positivo para un ingreso o corrección al alza, y uno negativo para una merma, daño o pérdida.'),
+                ...CamposCantidadPorCaja::campos(permitirNegativo: true),
                 Textarea::make('motivo')
                     ->label('Motivo/Observación')
                     ->required()
@@ -99,15 +95,28 @@ class AccionAjusteInventario
                     ->helperText('Obligatorio: describe la razón del ajuste (ej. "Merma por daño en almacén", "Corrección de conteo físico").'),
             ])
             ->action(function (array $data, Action $action): void {
+                $cantidadFinal = CamposCantidadPorCaja::cantidadFinalEnUnidades($data);
+                $motivo = $data['motivo'];
+
+                if (CamposCantidadPorCaja::esPorCaja($data)) {
+                    $unidadesPorCaja = (int) $data['unidades_por_caja'];
+                    $cantidadCajas = (int) $data['cantidad_cajas'];
+                    $motivo .= " (Ingreso por caja: {$cantidadCajas} caja(s) × {$unidadesPorCaja} unidades = {$cantidadFinal} unidades)";
+                }
+
                 try {
-                    app(RegistrarMovimientoInventarioAction::class)->handle(
-                        almacenId: (int) $data['almacen_id'],
-                        productoVarianteId: (int) $data['producto_variante_id'],
-                        tipoMovimiento: TipoMovimientoInventario::Ajuste,
-                        cantidad: (int) $data['cantidad'],
-                        motivo: $data['motivo'],
-                        usuarioId: Auth::id(),
-                    );
+                    DB::transaction(function () use ($data, $cantidadFinal, $motivo): void {
+                        CamposCantidadPorCaja::actualizarTamanoCajaSiCambio($data);
+
+                        app(RegistrarMovimientoInventarioAction::class)->handle(
+                            almacenId: (int) $data['almacen_id'],
+                            productoVarianteId: (int) $data['producto_variante_id'],
+                            tipoMovimiento: TipoMovimientoInventario::Ajuste,
+                            cantidad: $cantidadFinal,
+                            motivo: $motivo,
+                            usuarioId: Auth::id(),
+                        );
+                    });
 
                     Notification::make()
                         ->title('Ajuste registrado correctamente')

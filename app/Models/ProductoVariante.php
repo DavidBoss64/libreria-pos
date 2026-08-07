@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'codigo_barras',
     'codigo_interno',
     'atributos',
+    'unidades_por_caja',
     'costo_real',
     'precio_venta_unidad',
     'precio_venta_docena',
@@ -35,6 +36,7 @@ class ProductoVariante extends Model
     {
         return [
             'atributos' => 'array',
+            'unidades_por_caja' => 'integer',
             'costo_real' => 'decimal:2',
             'precio_venta_unidad' => 'decimal:2',
             'precio_venta_docena' => 'decimal:2',

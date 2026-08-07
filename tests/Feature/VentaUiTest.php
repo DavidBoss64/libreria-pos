@@ -13,6 +13,8 @@ use App\Filament\Pos\Resources\Ventas\Pages\ListVentas;
 use App\Models\Categoria;
 use App\Models\Cliente;
 use App\Models\Inventario;
+use App\Models\ListaEscolar;
+use App\Models\ListaEscolarDetalle;
 use App\Models\Producto;
 use App\Models\ProductoVariante;
 use App\Models\Sucursal;
@@ -267,6 +269,77 @@ class VentaUiTest extends TestCase
             'producto_variante_id' => $this->variante->id,
             'cantidad' => 2,
         ]);
+    }
+
+    public function test_aplicar_lista_escolar_agrega_todas_sus_lineas_a_la_canasta(): void
+    {
+        $lapiz = ProductoVariante::create([
+            'producto_id' => $this->variante->producto_id,
+            'codigo_interno' => 'LAP-001',
+            'costo_real' => 1.00,
+            'precio_venta_unidad' => 1.20,
+            'precio_venta_docena' => 1.10,
+            'precio_venta_mayor' => 1.00,
+            'estado' => true,
+        ]);
+
+        $lista = ListaEscolar::create(['nombre_plantilla' => '1ro Básico', 'colegio' => 'San Calixto']);
+        ListaEscolarDetalle::create(['lista_escolar_id' => $lista->id, 'producto_variante_id' => $this->variante->id, 'cantidad' => 3]);
+        ListaEscolarDetalle::create(['lista_escolar_id' => $lista->id, 'producto_variante_id' => $lapiz->id, 'cantidad' => 2]);
+
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $this->actingAs($vendedorA);
+        Filament::setCurrentPanel('pos');
+
+        $component = Livewire::test(CreateVenta::class)
+            ->set('data.aplicar_lista_escolar', $lista->id);
+
+        $detalles = data_get($component->get('data'), 'detalles', []);
+        $this->assertCount(2, $detalles, 'Debe agregar una fila por cada línea de la plantilla.');
+
+        $cantidadesPorVariante = collect($detalles)->pluck('cantidad', 'producto_variante_id');
+        $this->assertSame(3, (int) $cantidadesPorVariante[$this->variante->id]);
+        $this->assertSame(2, (int) $cantidadesPorVariante[$lapiz->id]);
+
+        // Aplicar la misma plantilla otra vez debe sumar cantidades, no duplicar filas.
+        $component->set('data.aplicar_lista_escolar', $lista->id);
+
+        $detalles = data_get($component->get('data'), 'detalles', []);
+        $this->assertCount(2, $detalles, 'Reaplicar la misma plantilla no debe duplicar filas.');
+
+        $cantidadesPorVariante = collect($detalles)->pluck('cantidad', 'producto_variante_id');
+        $this->assertSame(6, (int) $cantidadesPorVariante[$this->variante->id]);
+        $this->assertSame(4, (int) $cantidadesPorVariante[$lapiz->id]);
+    }
+
+    public function test_aplicar_lista_escolar_omite_lineas_de_productos_descontinuados(): void
+    {
+        $descontinuado = ProductoVariante::create([
+            'producto_id' => $this->variante->producto_id,
+            'codigo_interno' => 'DISC-001',
+            'costo_real' => 1.00,
+            'precio_venta_unidad' => 1.20,
+            'precio_venta_docena' => 1.10,
+            'precio_venta_mayor' => 1.00,
+            'estado' => false,
+        ]);
+
+        $lista = ListaEscolar::create(['nombre_plantilla' => '1ro Básico']);
+        ListaEscolarDetalle::create(['lista_escolar_id' => $lista->id, 'producto_variante_id' => $this->variante->id, 'cantidad' => 3]);
+        ListaEscolarDetalle::create(['lista_escolar_id' => $lista->id, 'producto_variante_id' => $descontinuado->id, 'cantidad' => 1]);
+
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $this->actingAs($vendedorA);
+        Filament::setCurrentPanel('pos');
+
+        $component = Livewire::test(CreateVenta::class)
+            ->set('data.aplicar_lista_escolar', $lista->id);
+
+        $detalles = data_get($component->get('data'), 'detalles', []);
+        $this->assertCount(1, $detalles, 'La línea del producto descontinuado debe omitirse.');
+        $this->assertSame($this->variante->id, (int) Arr::first($detalles)['producto_variante_id']);
     }
 
     public function test_cajero_puede_canjear_puntos_al_cobrar_desde_la_tabla(): void

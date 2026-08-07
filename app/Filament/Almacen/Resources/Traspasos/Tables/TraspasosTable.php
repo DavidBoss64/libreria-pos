@@ -50,7 +50,7 @@ class TraspasosTable
                     ->alignCenter(),
                 TextColumn::make('usuarioSolicitante.nombres')
                     ->label('Solicitante')
-                    ->formatStateUsing(fn ($record) => "{$record->usuarioSolicitante->nombres} {$record->usuarioSolicitante->apellidos}"),
+                    ->formatStateUsing(fn($record) => "{$record->usuarioSolicitante->nombres} {$record->usuarioSolicitante->apellidos}"),
                 TextColumn::make('created_at')
                     ->label('Solicitado')
                     ->dateTime('d/m/Y H:i')
@@ -66,8 +66,8 @@ class TraspasosTable
                     ->label('Preparar')
                     ->icon(Heroicon::OutlinedArchiveBoxArrowDown)
                     ->color('warning')
-                    ->visible(fn (Traspaso $record) => $record->estado === TraspasoEstado::Solicitado && Auth::user()?->can('update', $record))
-                    ->action(fn (Traspaso $record) => $record->update(['estado' => TraspasoEstado::Preparando])),
+                    ->visible(fn(Traspaso $record) => $record->estado === TraspasoEstado::Solicitado && Auth::user()?->can('update', $record))
+                    ->action(fn(Traspaso $record) => $record->update(['estado' => TraspasoEstado::Preparando])),
                 Action::make('registrarPreparacion')
                     ->label('Registrar preparación')
                     ->icon(Heroicon::OutlinedClipboardDocumentCheck)
@@ -76,7 +76,7 @@ class TraspasosTable
                     ->modalDescription('El "Disponible" es el stock actual en el almacén origen al momento de abrir este formulario; puede cambiar si hay otros movimientos en paralelo.')
                     ->modalSubmitActionLabel('Guardar')
                     ->modalWidth('3xl')
-                    ->visible(fn (Traspaso $record) => $record->estado === TraspasoEstado::Preparando && Auth::user()?->can('update', $record))
+                    ->visible(fn(Traspaso $record) => $record->estado === TraspasoEstado::Preparando && Auth::user()?->can('update', $record))
                     ->schema([
                         Repeater::make('detalles')
                             ->hiddenLabel()
@@ -87,7 +87,7 @@ class TraspasosTable
                                 TextEntry::make('producto_preview')
                                     ->hiddenLabel()
                                     ->html()
-                                    ->state(fn (Get $get) => $get('producto_html'))
+                                    ->state(fn(Get $get) => $get('producto_html'))
                                     ->columnSpanFull(),
                                 TextInput::make('cantidad')
                                     ->label('Solicitado')
@@ -97,18 +97,18 @@ class TraspasosTable
                                     ->label('Preparado')
                                     ->numeric()
                                     ->minValue(0)
-                                    ->maxValue(fn (Get $get) => min((int) $get('cantidad'), (int) $get('disponible')))
+                                    ->maxValue(fn(Get $get) => min((int) $get('cantidad'), (int) $get('disponible')))
                                     ->required()
-                                    ->hint(fn (Get $get) => "Disponible en origen: {$get('disponible')}")
-                                    ->hintColor(fn (Get $get) => ((int) $get('disponible')) >= ((int) $get('cantidad')) ? 'success' : 'danger')
-                                    ->hintIcon(fn (Get $get) => ((int) $get('disponible')) >= ((int) $get('cantidad')) ? null : Heroicon::OutlinedExclamationTriangle),
+                                    ->hint(fn(Get $get) => "Disponible en origen: {$get('disponible')}")
+                                    ->hintColor(fn(Get $get) => ((int) $get('disponible')) >= ((int) $get('cantidad')) ? 'success' : 'danger')
+                                    ->hintIcon(fn(Get $get) => ((int) $get('disponible')) >= ((int) $get('cantidad')) ? null : Heroicon::OutlinedExclamationTriangle),
                             ])
                             ->columns(2)
                             ->addable(false)
                             ->deletable(false)
                             ->reorderable(false),
                     ])
-                    ->fillForm(fn (Traspaso $record): array => static::datosParaPreparacion($record))
+                    ->fillForm(fn(Traspaso $record): array => static::datosParaPreparacion($record))
                     ->action(function (array $data, Traspaso $record): void {
                         foreach ($data['detalles'] as $detalleData) {
                             $record->detalles()
@@ -126,7 +126,7 @@ class TraspasosTable
                     ->icon(Heroicon::OutlinedTruck)
                     ->color('info')
                     ->requiresConfirmation()
-                    ->visible(fn (Traspaso $record) => $record->estado === TraspasoEstado::Preparando && Auth::user()?->can('update', $record))
+                    ->visible(fn(Traspaso $record) => $record->estado === TraspasoEstado::Preparando && Auth::user()?->can('update', $record))
                     ->action(function (Traspaso $record) {
                         try {
                             (new TransicionarTraspasoAEnTransitoAction())->handle($record);
@@ -149,7 +149,7 @@ class TraspasosTable
                     ->icon(Heroicon::OutlinedArchiveBox)
                     ->color('success')
                     ->requiresConfirmation()
-                    ->visible(fn (Traspaso $record) => $record->estado === TraspasoEstado::EnTransito && Auth::user()?->can('update', $record))
+                    ->visible(fn(Traspaso $record) => $record->estado === TraspasoEstado::EnTransito && Auth::user()?->can('update', $record))
                     ->action(function (Traspaso $record) {
                         try {
                             (new CompletarTraspasoAction())->handle($record, Auth::id());
@@ -172,12 +172,12 @@ class TraspasosTable
                     ->icon(Heroicon::OutlinedArchiveBoxXMark)
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn (Traspaso $record) => in_array($record->estado, [
+                    ->visible(fn(Traspaso $record) => in_array($record->estado, [
                         TraspasoEstado::Solicitado,
                         TraspasoEstado::Preparando,
                         TraspasoEstado::EnTransito,
                     ], true) && Auth::user()?->can('update', $record))
-                    ->action(fn (Traspaso $record) => $record->update(['estado' => TraspasoEstado::Cancelado])),
+                    ->action(fn(Traspaso $record) => $record->update(['estado' => TraspasoEstado::Cancelado])),
             ]);
     }
 
@@ -191,8 +191,9 @@ class TraspasosTable
             ->whereIn('producto_variante_id', $record->detalles->pluck('producto_variante_id'))
             ->pluck('cantidad', 'producto_variante_id');
 
+
         return [
-            'detalles' => $record->detalles->map(fn (TraspasoDetalle $detalle) => [
+            'detalles' => $record->detalles->map(fn(TraspasoDetalle $detalle) => [
                 'id' => $detalle->id,
                 'producto_html' => (string) static::renderPreviewVariante($detalle->productoVariante),
                 'cantidad' => $detalle->cantidad,
@@ -211,7 +212,7 @@ class TraspasosTable
             : '<div style="height:48px;width:48px;border-radius:0.5rem;background:rgb(228 228 231 / 0.5);flex-shrink:0;"></div>';
 
         $atributos = collect($variante->atributos ?? [])
-            ->map(fn ($valor, $clave) => Str::title((string) $clave) . ': ' . $valor)
+            ->map(fn($valor, $clave) => Str::title((string) $clave) . ': ' . $valor)
             ->implode(', ');
 
         $badges = collect([
@@ -220,7 +221,7 @@ class TraspasosTable
             $atributos !== '' ? $atributos : null,
             $variante->codigo_interno,
         ])->filter()
-            ->map(fn (string $texto) => '<span style="display:inline-block;padding:0.125rem 0.5rem;margin-right:0.25rem;border-radius:9999px;background:rgb(228 228 231 / 0.7);font-size:0.75rem;">' . e($texto) . '</span>')
+            ->map(fn(string $texto) => '<span style="display:inline-block;padding:0.125rem 0.5rem;margin-right:0.25rem;border-radius:9999px;background:rgb(228 228 231 / 0.7);font-size:0.75rem;">' . e($texto) . '</span>')
             ->implode('');
 
         return new HtmlString(

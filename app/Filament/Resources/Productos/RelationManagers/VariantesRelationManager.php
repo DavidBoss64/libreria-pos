@@ -46,7 +46,6 @@ class VariantesRelationManager extends RelationManager
         return number_format((((float) $precio - (float) $costo) / (float) $costo) * 100, 2, '.', '');
     }
 
-
     /**
      * Inverso de calcularMargen: sugiere el precio a partir del margen deseado.
      * También devuelve null si el costo no es válido, para no pisar el precio actual.
@@ -69,7 +68,7 @@ class VariantesRelationManager extends RelationManager
                 ->required()
                 ->prefix('S/')
                 ->live(onBlur: true)
-                ->afterStateUpdated(fn(Set $set, Get $get) => $set(
+                ->afterStateUpdated(fn (Set $set, Get $get) => $set(
                     $nombreMargen,
                     self::calcularMargen($get('costo_real'), $get($nombrePrecio))
                 )),
@@ -110,6 +109,13 @@ class VariantesRelationManager extends RelationManager
                     ->keyLabel('Atributo')
                     ->valueLabel('Valor')
                     ->reorderable(false),
+                TextInput::make('unidades_por_caja')
+                    ->label('Unidades por caja')
+                    ->numeric()
+                    ->integer()
+                    ->minValue(1)
+                    ->nullable()
+                    ->helperText('Opcional. Si se define, el ajuste manual de inventario permite ingresar stock por caja además de por unidad.'),
                 TextInput::make('costo_real')
                     ->label('Costo real')
                     ->numeric()
@@ -145,6 +151,10 @@ class VariantesRelationManager extends RelationManager
                     ->searchable(),
                 TextColumn::make('codigo_barras')
                     ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('unidades_por_caja')
+                    ->label('Unid./caja')
+                    ->placeholder('—')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('costo_real')
                     ->money('PEN')
