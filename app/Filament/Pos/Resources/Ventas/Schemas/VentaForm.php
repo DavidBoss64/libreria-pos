@@ -30,6 +30,7 @@ class VentaForm
         return $schema
             ->components([
                 Section::make('Cliente')
+                    ->description('¿Quién es el cliente? Elige uno registrado o escribe un nombre rápido para la cola de caja.')
                     ->columns(2)
                     ->columnSpanFull()
                     ->components([
@@ -58,7 +59,8 @@ class VentaForm
                             ->requiredWithout('cliente_id')
                             ->maxLength(100),
                     ]),
-                Section::make('Productos')
+                Section::make('Agregar productos')
+                    ->description('Busca por nombre, código interno, código de barras, o aplica una lista escolar completa de una vez.')
                     ->columns(2)
                     ->columnSpanFull()
                     ->components([
@@ -134,6 +136,11 @@ class VentaForm
                                         ->send();
                                 }
                             }),
+                    ]),
+                Section::make('Canasta')
+                    ->description('Productos agregados a esta pre-venta. Para cambiar de variante, elimina la línea y vuelve a buscarla.')
+                    ->columnSpanFull()
+                    ->components([
                         Repeater::make('detalles')
                             ->hiddenLabel()
                             ->schema([
@@ -177,9 +184,14 @@ class VentaForm
                                 return $variante ? SelectorProductoVariante::labelVarianteConProducto($variante) : null;
                             })
                             ->live(),
+                    ]),
+                Section::make('Resumen')
+                    ->columnSpanFull()
+                    ->components([
                         TextEntry::make('total_estimado')
                             ->label('Total estimado')
                             ->weight('bold')
+                            ->size('lg')
                             ->state(fn (Get $get) => static::totalEstimado($get('detalles') ?? []))
                             ->columnSpanFull(),
                     ]),

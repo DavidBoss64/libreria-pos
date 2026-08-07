@@ -10,6 +10,7 @@ use App\Enums\VentaEstado;
 use App\Enums\VentaMetodoPago;
 use App\Filament\Pos\Resources\Ventas\Pages\CreateVenta;
 use App\Filament\Pos\Resources\Ventas\Pages\ListVentas;
+use App\Filament\Pos\Resources\Ventas\Tables\VentasTable;
 use App\Models\Categoria;
 use App\Models\Cliente;
 use App\Models\Inventario;
@@ -375,5 +376,116 @@ class VentaUiTest extends TestCase
         $this->assertSame(5, $venta->puntos_utilizados);
         $this->assertSame('1.50', (string) $venta->descuento_por_puntos);
         $this->assertSame(5, $cliente->fresh()->puntos_acumulados, '10 iniciales - 5 canjeados + 0 ganados sobre el total final (11.50 < 30).');
+    }
+
+    /**
+     * Nota de testing: el modal "Cobrar" carga su contenido vía un partial diferido de
+     * Filament (`wire:partial="action-modals"`), que no aparece en el snapshot de
+     * `Livewire::test()` — por eso el resumen de productos y el cálculo de vuelto se
+     * prueban llamando directamente a los helpers puros de `VentasTable` (mismo criterio
+     * que el resto del proyecto: los textos de preview de un formulario no se prueban vía
+     * render, solo el comportamiento funcional real — ver `VentaForm::totalEstimado()`,
+     * nunca probado vía `assertSee`).
+     */
+    public function test_el_resumen_de_productos_lista_cada_linea_con_su_subtotal(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_temporal' => 'Juan',
+            'detalles' => [
+                ['producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+            ],
+        ]);
+
+        $html = (string) VentasTable::resumenProductos($venta);
+
+        $this->assertStringContainsString('Cuaderno 100 hojas', $html);
+        $this->assertStringContainsString('CUA-001', $html);
+        $this->assertStringContainsString('× 2', $html);
+        $this->assertStringContainsString('S/ 13.00', $html);
+    }
+
+    public function test_el_resumen_de_productos_avisa_si_la_venta_no_tiene_lineas(): void
+    {
+        $venta = Venta::create([
+            'sucursal_id' => $this->sucursalA->id,
+            'cliente_temporal' => 'Juan',
+            'total' => 0,
+            'estado' => VentaEstado::Pendiente,
+        ]);
+
+        $html = (string) VentasTable::resumenProductos($venta);
+
+        $this->assertStringContainsString('no tiene productos', $html);
+    }
+
+    public function test_el_vuelto_se_calcula_correctamente_cuando_el_monto_recibido_alcanza(): void
+    {
+        // Total: 2 × 6.50 = 13.00
+        $venta = Venta::make(['total' => 13.00]);
+
+        $this->assertSame('Vuelto a devolver: S/ 7.00', VentasTable::previewVuelto('20', $venta));
+        $this->assertSame('success', VentasTable::colorVuelto('20', $venta));
+
+        // Monto exacto: vuelto en cero, sigue siendo un cobro válido.
+        $this->assertSame('Vuelto a devolver: S/ 0.00', VentasTable::previewVuelto('13', $venta));
+        $this->assertSame('success', VentasTable::colorVuelto('13', $venta));
+    }
+
+    public function test_el_vuelto_avisa_sin_bloquear_cuando_el_monto_recibido_no_alcanza(): void
+    {
+        // Total: 2 × 6.50 = 13.00
+        $venta = Venta::make(['total' => 13.00]);
+
+        $this->assertSame(
+            'Falta S/ 3.00 — el monto recibido no cubre el total (S/ 13.00).',
+            VentasTable::previewVuelto('10', $venta)
+        );
+        $this->assertSame('danger', VentasTable::colorVuelto('10', $venta));
+    }
+
+    public function test_el_vuelto_no_se_calcula_hasta_que_se_ingrese_un_monto(): void
+    {
+        $venta = Venta::make(['total' => 13.00]);
+
+        $this->assertSame('Ingresa el monto recibido para calcular el vuelto.', VentasTable::previewVuelto(null, $venta));
+        $this->assertSame('gray', VentasTable::colorVuelto(null, $venta));
+    }
+
+    public function test_el_cobro_en_efectivo_funciona_normalmente_con_el_monto_recibido_presente_en_el_formulario(): void
+    {
+        $vendedorA = User::factory()->create(['role' => UserRole::Vendedor, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+        $cajeroA = User::factory()->create(['role' => UserRole::Cajero, 'is_active' => true, 'sucursal_id' => $this->sucursalA->id]);
+
+        $venta = (new CrearPreventaAction)->handle([
+            'sucursal_id' => $this->sucursalA->id,
+            'vendedor_id' => $vendedorA->id,
+            'cliente_temporal' => 'Juan',
+            'detalles' => [
+                ['producto_variante_id' => $this->variante->id, 'cantidad' => 2],
+            ],
+        ]);
+
+        $this->actingAs($cajeroA);
+        Filament::setCurrentPanel('pos');
+
+        // "monto_recibido" es efímero (dehydrated(false), no hay columna para esto en
+        // `ventas`) — incluirlo en el envío no debe alterar el cierre real de la venta.
+        Livewire::test(ListVentas::class)
+            ->mountTableAction('cobrar', $venta)
+            ->setTableActionData([
+                'metodo_pago' => VentaMetodoPago::Efectivo->value,
+                'monto_recibido' => '10',
+            ])
+            ->assertHasNoTableActionErrors()
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $venta->refresh();
+        $this->assertSame(VentaEstado::Completado, $venta->estado);
+        $this->assertSame('13.00', (string) $venta->total);
     }
 }

@@ -111,9 +111,14 @@ class CompraForm
                             ->addActionLabel('Agregar otro producto')
                             ->reorderable(false)
                             ->live(),
+                    ]),
+                Section::make('Resumen')
+                    ->columnSpanFull()
+                    ->components([
                         TextEntry::make('total_estimado')
                             ->label('Total de la compra')
                             ->weight('bold')
+                            ->size('lg')
                             ->state(fn (Get $get) => static::previewTotal($get('detalles') ?? []))
                             ->columnSpanFull(),
                     ]),

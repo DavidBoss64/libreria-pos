@@ -14,6 +14,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 
+
 class AdelantoSueldoResource extends Resource
 {
     protected static ?string $model = AdelantoSueldo::class;

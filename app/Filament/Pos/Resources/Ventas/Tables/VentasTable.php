@@ -10,11 +10,14 @@ use App\Enums\VentaEstado;
 use App\Enums\VentaMetodoPago;
 use App\Exceptions\PuntosInsuficientesException;
 use App\Exceptions\VentaSinStockDisponibleException;
+use App\Filament\Support\SelectorProductoVariante;
 use App\Models\Venta;
+use App\Models\VentaDetalle;
 use Filament\Actions\Action;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Support\Icons\Heroicon;
@@ -22,6 +25,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -70,6 +74,18 @@ class VentasTable
                     ->modalSubmitActionLabel('Confirmar cobro')
                     ->visible(fn (Venta $record) => $record->estado === VentaEstado::Pendiente && Auth::user()?->can('cobrar', $record))
                     ->schema([
+                        TextEntry::make('resumen_productos')
+                            ->label('Productos en esta venta')
+                            ->html()
+                            ->state(fn (Venta $record) => static::resumenProductos($record))
+                            ->columnSpanFull(),
+                        TextEntry::make('total_a_cobrar')
+                            ->label('Total a cobrar')
+                            ->weight('bold')
+                            ->size('lg')
+                            ->color('primary')
+                            ->state(fn (Venta $record) => "S/ {$record->total}")
+                            ->columnSpanFull(),
                         Select::make('metodo_pago')
                             ->label('Método de pago')
                             ->options(VentaMetodoPago::class)
@@ -83,6 +99,22 @@ class VentasTable
                             // siempre da true (instancia !== string) y deja este campo requerido siempre.
                             ->required(fn (Get $get) => $get('metodo_pago') !== VentaMetodoPago::Efectivo)
                             ->maxLength(255),
+                        TextInput::make('monto_recibido')
+                            ->label('Monto recibido (efectivo)')
+                            ->helperText('Cuánto dinero entrega el cliente — solo para calcular el vuelto, no se guarda en el sistema.')
+                            ->numeric()
+                            ->minValue(0)
+                            ->prefix('S/')
+                            ->live(onBlur: true)
+                            ->dehydrated(false)
+                            ->visible(fn (Get $get) => $get('metodo_pago') === VentaMetodoPago::Efectivo),
+                        TextEntry::make('vuelto_preview')
+                            ->hiddenLabel()
+                            ->weight('bold')
+                            ->color(fn (Get $get, Venta $record) => static::colorVuelto($get('monto_recibido'), $record))
+                            ->state(fn (Get $get, Venta $record) => static::previewVuelto($get('monto_recibido'), $record))
+                            ->visible(fn (Get $get) => $get('metodo_pago') === VentaMetodoPago::Efectivo)
+                            ->columnSpanFull(),
                         TextInput::make('puntos_utilizados')
                             ->label('Puntos a canjear')
                             ->helperText(fn (Venta $record) => $record->cliente
@@ -151,5 +183,59 @@ class VentasTable
                     }),
             ])
             ->defaultSort('created_at', 'desc');
+    }
+
+    /**
+     * Lista compacta de solo lectura (nombre × cantidad — subtotal) para que el Cajero
+     * verifique el contenido de la canasta sin salir del modal de cobro. Deliberadamente
+     * no editable desde aquí: el Cajero cobra, no modifica la canasta armada por el
+     * Vendedor (LOGICA_NEGOCIO.md sección 2) — si algo está mal, se cancela la pre-venta
+     * y el Vendedor la rehace, no se corrige a mitad del cobro.
+     */
+    public static function resumenProductos(Venta $record): HtmlString
+    {
+        $lineas = $record->detalles()->with('productoVariante.producto')->get();
+
+        if ($lineas->isEmpty()) {
+            return new HtmlString('<p style="font-size:0.875rem;color:rgb(113 113 122);">Esta venta no tiene productos.</p>');
+        }
+
+        $filas = $lineas->map(function (VentaDetalle $detalle) {
+            $variante = $detalle->productoVariante;
+            $nombre = $variante ? SelectorProductoVariante::labelVarianteConProducto($variante) : 'Producto eliminado';
+
+            return '<li style="display:flex;justify-content:space-between;gap:1rem;padding:0.375rem 0;border-bottom:1px solid rgb(228 228 231 / 0.5);">'
+                .'<span>'.e($nombre).' × '.e((string) $detalle->cantidad).'</span>'
+                .'<span style="font-weight:600;white-space:nowrap;">S/ '.e((string) $detalle->subtotal).'</span>'
+                .'</li>';
+        })->implode('');
+
+        return new HtmlString('<ul style="list-style:none;margin:0;padding:0;font-size:0.875rem;">'.$filas.'</ul>');
+    }
+
+    public static function previewVuelto(mixed $montoRecibido, Venta $record): string
+    {
+        if (blank($montoRecibido) || ! is_numeric($montoRecibido)) {
+            return 'Ingresa el monto recibido para calcular el vuelto.';
+        }
+
+        $vuelto = bcsub((string) $montoRecibido, (string) $record->total, 2);
+
+        if (bccomp($vuelto, '0.00', 2) < 0) {
+            $faltante = bcmul($vuelto, '-1', 2);
+
+            return "Falta S/ {$faltante} — el monto recibido no cubre el total (S/ {$record->total}).";
+        }
+
+        return "Vuelto a devolver: S/ {$vuelto}";
+    }
+
+    public static function colorVuelto(mixed $montoRecibido, Venta $record): string
+    {
+        if (blank($montoRecibido) || ! is_numeric($montoRecibido)) {
+            return 'gray';
+        }
+
+        return bccomp((string) $montoRecibido, (string) $record->total, 2) < 0 ? 'danger' : 'success';
     }
 }
